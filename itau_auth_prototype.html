@@ -1,0 +1,1686 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Itaú — Behaviorally-Informed Authentication Prototype</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=DM+Sans:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --itau-orange: #EC7000;
+    --itau-orange-light: #FF8C1A;
+    --itau-blue: #003087;
+    --itau-blue-mid: #004DB3;
+    --itau-blue-light: #E8F0FF;
+    --itau-dark: #1A1A2E;
+    --tier1: #00A86B;
+    --tier1-bg: #E6F7F1;
+    --tier2: #F5A623;
+    --tier2-bg: #FEF5E7;
+    --tier3: #E03E3E;
+    --tier3-bg: #FDEAEA;
+    --gray-50: #F8F9FB;
+    --gray-100: #F0F2F5;
+    --gray-200: #E2E6EC;
+    --gray-400: #9AA3B2;
+    --gray-600: #5A6478;
+    --gray-800: #2D3748;
+    --white: #FFFFFF;
+    --shadow-sm: 0 1px 3px rgba(0,0,0,0.08), 0 1px 2px rgba(0,0,0,0.04);
+    --shadow-md: 0 4px 16px rgba(0,0,0,0.10), 0 2px 6px rgba(0,0,0,0.06);
+    --shadow-lg: 0 12px 40px rgba(0,0,0,0.14), 0 4px 12px rgba(0,0,0,0.08);
+    --radius: 16px;
+    --radius-sm: 10px;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    font-family: 'DM Sans', sans-serif;
+    background: #0D1B2A;
+    color: var(--gray-800);
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
+
+  /* ── LAYOUT ── */
+  .app-shell {
+    display: flex;
+    flex-direction: column;
+    min-height: 100vh;
+  }
+
+  .top-bar {
+    background: linear-gradient(135deg, #003087 0%, #004DB3 100%);
+    padding: 16px 32px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    box-shadow: 0 2px 20px rgba(0,0,0,0.3);
+    position: sticky;
+    top: 0;
+    z-index: 100;
+  }
+
+  .logo-area {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+  }
+
+  .itau-logo {
+    width: 44px;
+    height: 44px;
+    background: var(--itau-orange);
+    border-radius: 12px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 800;
+    font-size: 18px;
+    color: white;
+    letter-spacing: -1px;
+    font-family: 'Inter', sans-serif;
+    box-shadow: 0 2px 8px rgba(236,112,0,0.4);
+  }
+
+  .logo-text {
+    color: white;
+    font-size: 14px;
+    font-weight: 500;
+    opacity: 0.9;
+    line-height: 1.4;
+  }
+  .logo-text strong { display: block; font-size: 16px; font-weight: 700; opacity: 1; }
+
+  .top-bar-right {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .badge-prototype {
+    background: rgba(236,112,0,0.25);
+    border: 1px solid rgba(236,112,0,0.5);
+    color: #FFB366;
+    font-size: 11px;
+    font-weight: 600;
+    padding: 4px 10px;
+    border-radius: 20px;
+    letter-spacing: 0.5px;
+    text-transform: uppercase;
+  }
+
+  .main-content {
+    flex: 1;
+    display: grid;
+    grid-template-columns: 340px 1fr;
+    gap: 0;
+    align-items: start;
+  }
+
+  /* ── SIDEBAR ── */
+  .sidebar {
+    background: #111827;
+    border-right: 1px solid rgba(255,255,255,0.07);
+    padding: 28px 0;
+    min-height: calc(100vh - 76px);
+    position: sticky;
+    top: 76px;
+  }
+
+  .sidebar-section {
+    padding: 0 20px 24px;
+    border-bottom: 1px solid rgba(255,255,255,0.06);
+    margin-bottom: 8px;
+  }
+
+  .sidebar-label {
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 1.2px;
+    text-transform: uppercase;
+    color: var(--gray-400);
+    margin-bottom: 12px;
+    padding: 0 4px;
+  }
+
+  .scenario-btn {
+    width: 100%;
+    background: transparent;
+    border: none;
+    border-radius: var(--radius-sm);
+    padding: 12px 14px;
+    text-align: left;
+    cursor: pointer;
+    transition: all 0.2s;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 4px;
+  }
+
+  .scenario-btn:hover { background: rgba(255,255,255,0.06); }
+  .scenario-btn.active { background: rgba(0,77,179,0.3); border: 1px solid rgba(0,77,179,0.4); }
+
+  .scenario-icon {
+    width: 36px;
+    height: 36px;
+    border-radius: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 16px;
+    flex-shrink: 0;
+  }
+
+  .t1 .scenario-icon { background: rgba(0,168,107,0.2); }
+  .t2 .scenario-icon { background: rgba(245,166,35,0.2); }
+  .t3 .scenario-icon { background: rgba(224,62,62,0.2); }
+
+  .scenario-info { flex: 1; min-width: 0; }
+  .scenario-name { font-size: 13px; font-weight: 600; color: #E2E8F0; margin-bottom: 2px; }
+  .scenario-desc { font-size: 11px; color: var(--gray-400); line-height: 1.4; }
+
+  .tier-pill {
+    font-size: 10px;
+    font-weight: 700;
+    padding: 3px 8px;
+    border-radius: 20px;
+    flex-shrink: 0;
+    letter-spacing: 0.3px;
+  }
+  .tier-pill.t1 { background: rgba(0,168,107,0.2); color: #4ADEAA; }
+  .tier-pill.t2 { background: rgba(245,166,35,0.2); color: #FCD34D; }
+  .tier-pill.t3 { background: rgba(224,62,62,0.2); color: #FCA5A5; }
+
+  .view-toggle {
+    display: flex;
+    background: rgba(255,255,255,0.05);
+    border-radius: 8px;
+    padding: 3px;
+    gap: 2px;
+  }
+
+  .view-btn {
+    flex: 1;
+    background: transparent;
+    border: none;
+    color: var(--gray-400);
+    font-size: 12px;
+    font-weight: 600;
+    padding: 7px 10px;
+    border-radius: 6px;
+    cursor: pointer;
+    transition: all 0.2s;
+    font-family: 'DM Sans', sans-serif;
+  }
+  .view-btn.active { background: var(--itau-blue-mid); color: white; }
+
+  /* ── CONTENT AREA ── */
+  .content-area {
+    padding: 32px;
+    background: #0D1B2A;
+    min-height: calc(100vh - 76px);
+  }
+
+  .view-panel { display: none; }
+  .view-panel.active { display: block; }
+
+  /* ── MOBILE MOCKUP ── */
+  .device-row {
+    display: flex;
+    gap: 32px;
+    align-items: flex-start;
+    flex-wrap: wrap;
+  }
+
+  .device-container {
+    flex-shrink: 0;
+  }
+
+  .device-label {
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--gray-400);
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    margin-bottom: 12px;
+    text-align: center;
+  }
+
+  .phone-frame {
+    width: 320px;
+    background: #1C1C1E;
+    border-radius: 44px;
+    padding: 12px;
+    box-shadow: 0 0 0 1px rgba(255,255,255,0.1), var(--shadow-lg), inset 0 0 0 1px rgba(0,0,0,0.5);
+    position: relative;
+  }
+
+  .phone-notch {
+    width: 100px;
+    height: 28px;
+    background: #1C1C1E;
+    border-radius: 0 0 18px 18px;
+    position: absolute;
+    top: 12px;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 10;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .phone-notch::after {
+    content: '';
+    width: 10px;
+    height: 10px;
+    background: #2A2A2C;
+    border-radius: 50%;
+    border: 1px solid rgba(255,255,255,0.05);
+  }
+
+  .phone-screen {
+    background: var(--white);
+    border-radius: 34px;
+    overflow: hidden;
+    height: 620px;
+    position: relative;
+  }
+
+  /* ── SCREEN CONTENT ── */
+  .screen { display: none; height: 100%; flex-direction: column; }
+  .screen.active { display: flex; }
+
+  .status-bar {
+    background: var(--itau-blue);
+    padding: 38px 20px 10px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+
+  .status-time { color: white; font-size: 12px; font-weight: 700; font-family: 'Inter', sans-serif; }
+  .status-icons { color: white; font-size: 10px; opacity: 0.9; }
+
+  .screen-header {
+    background: var(--itau-blue);
+    padding: 4px 20px 20px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+
+  .back-btn {
+    width: 32px;
+    height: 32px;
+    background: rgba(255,255,255,0.15);
+    border-radius: 10px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: white;
+    font-size: 14px;
+    cursor: pointer;
+    flex-shrink: 0;
+  }
+
+  .screen-title { color: white; font-size: 17px; font-weight: 700; }
+
+  .screen-body {
+    flex: 1;
+    overflow-y: auto;
+    background: var(--gray-50);
+  }
+
+  /* TIER INDICATOR */
+  .tier-indicator {
+    margin: 16px;
+    border-radius: var(--radius-sm);
+    padding: 12px 14px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    animation: slideDown 0.3s ease;
+  }
+
+  @keyframes slideDown {
+    from { opacity: 0; transform: translateY(-8px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  .tier-indicator.t1 { background: var(--tier1-bg); border: 1px solid rgba(0,168,107,0.3); }
+  .tier-indicator.t2 { background: var(--tier2-bg); border: 1px solid rgba(245,166,35,0.3); }
+  .tier-indicator.t3 { background: var(--tier3-bg); border: 1px solid rgba(224,62,62,0.3); }
+
+  .tier-dot {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    flex-shrink: 0;
+  }
+  .t1 .tier-dot { background: var(--tier1); box-shadow: 0 0 6px var(--tier1); }
+  .t2 .tier-dot { background: var(--tier2); box-shadow: 0 0 6px var(--tier2); }
+  .t3 .tier-dot { background: var(--tier3); box-shadow: 0 0 6px var(--tier3); animation: pulse 1.5s infinite; }
+
+  @keyframes pulse {
+    0%, 100% { box-shadow: 0 0 6px var(--tier3); }
+    50% { box-shadow: 0 0 12px var(--tier3), 0 0 20px rgba(224,62,62,0.3); }
+  }
+
+  .tier-indicator-text { flex: 1; }
+  .tier-indicator-label { font-size: 11px; font-weight: 700; margin-bottom: 1px; }
+  .t1 .tier-indicator-label { color: var(--tier1); }
+  .t2 .tier-indicator-label { color: #D4820A; }
+  .t3 .tier-indicator-label { color: var(--tier3); }
+  .tier-indicator-detail { font-size: 11px; color: var(--gray-600); line-height: 1.4; }
+
+  /* CARD */
+  .card {
+    background: white;
+    border-radius: var(--radius-sm);
+    margin: 0 16px 12px;
+    box-shadow: var(--shadow-sm);
+    overflow: hidden;
+    border: 1px solid var(--gray-200);
+  }
+
+  .card-header {
+    padding: 14px 16px 10px;
+    border-bottom: 1px solid var(--gray-100);
+  }
+
+  .card-title {
+    font-size: 12px;
+    font-weight: 700;
+    color: var(--gray-400);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+
+  .card-body { padding: 14px 16px; }
+
+  .amount-display {
+    text-align: center;
+    padding: 20px 16px;
+  }
+
+  .amount-label { font-size: 12px; color: var(--gray-400); margin-bottom: 6px; }
+  .amount-value { font-size: 32px; font-weight: 700; color: var(--gray-800); font-family: 'Inter', sans-serif; }
+  .amount-value .currency { font-size: 18px; font-weight: 500; color: var(--gray-600); }
+
+  .field-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 10px 0;
+    border-bottom: 1px solid var(--gray-100);
+  }
+  .field-row:last-child { border-bottom: none; }
+  .field-label { font-size: 13px; color: var(--gray-400); }
+  .field-value { font-size: 13px; font-weight: 600; color: var(--gray-800); text-align: right; max-width: 60%; }
+
+  /* AUTH METHODS */
+  .auth-method {
+    border-radius: var(--radius-sm);
+    padding: 14px;
+    margin: 0 16px 10px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    cursor: pointer;
+    transition: all 0.2s;
+    border: 1.5px solid var(--gray-200);
+    background: white;
+  }
+
+  .auth-method.selected {
+    border-color: var(--itau-blue-mid);
+    background: var(--itau-blue-light);
+  }
+
+  .auth-method-icon {
+    width: 40px;
+    height: 40px;
+    border-radius: 10px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 20px;
+    background: var(--gray-100);
+    flex-shrink: 0;
+  }
+
+  .auth-method-info .auth-method-name { font-size: 14px; font-weight: 600; color: var(--gray-800); }
+  .auth-method-info .auth-method-time { font-size: 11px; color: var(--gray-400); margin-top: 2px; }
+
+  /* BIOMETRIC */
+  .biometric-screen {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 32px 20px;
+    gap: 16px;
+    flex: 1;
+  }
+
+  .fingerprint-ring {
+    width: 100px;
+    height: 100px;
+    border-radius: 50%;
+    border: 3px solid var(--itau-blue-mid);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 48px;
+    position: relative;
+    animation: ringPulse 2s ease-in-out infinite;
+  }
+
+  @keyframes ringPulse {
+    0%, 100% { box-shadow: 0 0 0 0 rgba(0,77,179,0.3); }
+    50% { box-shadow: 0 0 0 16px rgba(0,77,179,0); }
+  }
+
+  .biometric-title { font-size: 18px; font-weight: 700; color: var(--gray-800); text-align: center; }
+  .biometric-sub { font-size: 13px; color: var(--gray-400); text-align: center; line-height: 1.5; }
+
+  /* COUNTDOWN */
+  .countdown-container {
+    background: white;
+    border-radius: var(--radius-sm);
+    margin: 16px;
+    padding: 20px;
+    text-align: center;
+    border: 2px solid var(--tier3);
+    box-shadow: 0 4px 16px rgba(224,62,62,0.1);
+  }
+
+  .countdown-title { font-size: 14px; font-weight: 700; color: var(--tier3); margin-bottom: 12px; }
+  .countdown-number {
+    font-size: 64px;
+    font-weight: 800;
+    color: var(--tier3);
+    font-family: 'Inter', sans-serif;
+    line-height: 1;
+    animation: countdownTick 1s steps(1) infinite;
+  }
+  @keyframes countdownTick {
+    0% { opacity: 1; }
+    50% { opacity: 0.7; }
+  }
+  .countdown-sub { font-size: 11px; color: var(--gray-400); margin-top: 8px; line-height: 1.5; }
+
+  .notification-preview {
+    background: #1C1C1E;
+    border-radius: 12px;
+    margin: 0 16px 12px;
+    padding: 12px 14px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    border: 1px solid rgba(255,255,255,0.1);
+  }
+
+  .notif-icon {
+    width: 32px;
+    height: 32px;
+    background: var(--itau-orange);
+    border-radius: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 14px;
+    flex-shrink: 0;
+  }
+
+  .notif-body { flex: 1; }
+  .notif-app { font-size: 10px; color: rgba(255,255,255,0.4); font-weight: 600; letter-spacing: 0.3px; }
+  .notif-text { font-size: 12px; color: rgba(255,255,255,0.85); line-height: 1.4; }
+
+  /* ACTION BUTTONS */
+  .action-bar {
+    padding: 12px 16px 16px;
+    background: white;
+    border-top: 1px solid var(--gray-200);
+    display: flex;
+    gap: 8px;
+  }
+
+  .btn-primary {
+    flex: 1;
+    background: var(--itau-orange);
+    color: white;
+    border: none;
+    border-radius: 12px;
+    padding: 14px;
+    font-size: 14px;
+    font-weight: 700;
+    cursor: pointer;
+    font-family: 'DM Sans', sans-serif;
+    transition: all 0.2s;
+    box-shadow: 0 4px 12px rgba(236,112,0,0.3);
+  }
+  .btn-primary:hover { background: var(--itau-orange-light); transform: translateY(-1px); box-shadow: 0 6px 16px rgba(236,112,0,0.4); }
+
+  .btn-secondary {
+    background: var(--gray-100);
+    color: var(--gray-600);
+    border: none;
+    border-radius: 12px;
+    padding: 14px 18px;
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+    font-family: 'DM Sans', sans-serif;
+    transition: all 0.2s;
+  }
+  .btn-secondary:hover { background: var(--gray-200); }
+
+  .btn-danger {
+    flex: 1;
+    background: transparent;
+    color: var(--tier3);
+    border: 1.5px solid var(--tier3);
+    border-radius: 12px;
+    padding: 14px;
+    font-size: 14px;
+    font-weight: 700;
+    cursor: pointer;
+    font-family: 'DM Sans', sans-serif;
+    transition: all 0.2s;
+  }
+
+  /* ── EXPLANATION PANEL ── */
+  .explanation-panel {
+    flex: 1;
+    min-width: 280px;
+    max-width: 520px;
+  }
+
+  .exp-card {
+    background: rgba(255,255,255,0.04);
+    border: 1px solid rgba(255,255,255,0.08);
+    border-radius: 16px;
+    padding: 24px;
+    margin-bottom: 16px;
+  }
+
+  .exp-title {
+    font-size: 13px;
+    font-weight: 700;
+    color: rgba(255,255,255,0.9);
+    margin-bottom: 16px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+
+  .exp-title .exp-icon {
+    width: 28px;
+    height: 28px;
+    border-radius: 7px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 13px;
+  }
+
+  .risk-meter { margin-bottom: 20px; }
+  .risk-label-row {
+    display: flex;
+    justify-content: space-between;
+    margin-bottom: 6px;
+  }
+  .risk-label { font-size: 12px; color: rgba(255,255,255,0.5); }
+  .risk-value { font-size: 12px; font-weight: 700; }
+
+  .risk-bar-bg {
+    height: 8px;
+    background: rgba(255,255,255,0.08);
+    border-radius: 4px;
+    overflow: hidden;
+  }
+
+  .risk-bar-fill {
+    height: 100%;
+    border-radius: 4px;
+    transition: width 0.6s ease;
+  }
+
+  .signal-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 8px 0;
+    border-bottom: 1px solid rgba(255,255,255,0.05);
+  }
+  .signal-row:last-child { border-bottom: none; }
+
+  .signal-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    flex-shrink: 0;
+  }
+  .signal-dot.green { background: var(--tier1); }
+  .signal-dot.yellow { background: var(--tier2); }
+  .signal-dot.red { background: var(--tier3); }
+
+  .signal-text { font-size: 12px; color: rgba(255,255,255,0.6); flex: 1; }
+  .signal-val { font-size: 12px; font-weight: 600; color: rgba(255,255,255,0.85); }
+
+  .principle-tag {
+    display: inline-block;
+    background: rgba(0,77,179,0.3);
+    border: 1px solid rgba(0,77,179,0.5);
+    color: #7EB6FF;
+    font-size: 11px;
+    font-weight: 600;
+    padding: 4px 10px;
+    border-radius: 20px;
+    margin: 3px 3px 3px 0;
+  }
+
+  .quote-block {
+    background: rgba(255,255,255,0.03);
+    border-left: 3px solid var(--itau-blue-mid);
+    padding: 12px 16px;
+    border-radius: 0 8px 8px 0;
+    margin-top: 12px;
+  }
+
+  .quote-text {
+    font-size: 12px;
+    color: rgba(255,255,255,0.55);
+    line-height: 1.6;
+    font-style: italic;
+  }
+
+  .quote-source {
+    font-size: 11px;
+    color: rgba(255,255,255,0.3);
+    margin-top: 6px;
+    font-weight: 600;
+  }
+
+  /* ── WEB VIEW ── */
+  .browser-frame {
+    background: #2D2D2D;
+    border-radius: 12px;
+    overflow: hidden;
+    box-shadow: var(--shadow-lg);
+    margin-bottom: 24px;
+  }
+
+  .browser-bar {
+    background: #3C3C3C;
+    padding: 10px 16px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+
+  .browser-dots { display: flex; gap: 6px; }
+  .browser-dot { width: 12px; height: 12px; border-radius: 50%; }
+  .browser-dot:nth-child(1) { background: #FF5F57; }
+  .browser-dot:nth-child(2) { background: #FFBD2E; }
+  .browser-dot:nth-child(3) { background: #28CA41; }
+
+  .browser-url {
+    flex: 1;
+    background: #252525;
+    border-radius: 6px;
+    padding: 5px 12px;
+    font-size: 12px;
+    color: rgba(255,255,255,0.5);
+    font-family: 'Inter', sans-serif;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+
+  .browser-url .lock { color: #28CA41; font-size: 10px; }
+
+  .web-content {
+    background: white;
+    min-height: 500px;
+  }
+
+  .web-topbar {
+    background: var(--itau-blue);
+    padding: 0 40px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    height: 60px;
+  }
+
+  .web-logo {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    color: white;
+  }
+
+  .web-logo-mark {
+    width: 32px;
+    height: 32px;
+    background: var(--itau-orange);
+    border-radius: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 800;
+    font-size: 13px;
+    color: white;
+    font-family: 'Inter', sans-serif;
+  }
+
+  .web-logo-name { font-size: 18px; font-weight: 700; color: white; }
+
+  .web-nav { display: flex; gap: 24px; }
+  .web-nav a {
+    color: rgba(255,255,255,0.7);
+    text-decoration: none;
+    font-size: 13px;
+    font-weight: 500;
+    transition: color 0.2s;
+  }
+  .web-nav a:hover, .web-nav a.active { color: white; }
+
+  .web-user {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    color: white;
+  }
+
+  .web-avatar {
+    width: 34px;
+    height: 34px;
+    background: var(--itau-orange);
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 13px;
+    font-weight: 700;
+  }
+
+  .web-body {
+    display: grid;
+    grid-template-columns: 220px 1fr;
+    min-height: 440px;
+  }
+
+  .web-sidebar {
+    background: var(--gray-50);
+    border-right: 1px solid var(--gray-200);
+    padding: 20px 0;
+  }
+
+  .web-menu-item {
+    padding: 10px 20px;
+    font-size: 13px;
+    color: var(--gray-600);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    transition: all 0.15s;
+    border-left: 3px solid transparent;
+  }
+
+  .web-menu-item:hover { background: var(--gray-100); color: var(--gray-800); }
+  .web-menu-item.active { background: white; color: var(--itau-blue); font-weight: 600; border-left-color: var(--itau-orange); }
+
+  .web-main { padding: 28px 32px; }
+
+  .web-page-title {
+    font-size: 22px;
+    font-weight: 700;
+    color: var(--gray-800);
+    margin-bottom: 6px;
+  }
+
+  .web-page-sub {
+    font-size: 13px;
+    color: var(--gray-400);
+    margin-bottom: 24px;
+  }
+
+  .web-tier-banner {
+    border-radius: 10px;
+    padding: 14px 18px;
+    margin-bottom: 20px;
+    display: flex;
+    align-items: center;
+    gap: 14px;
+  }
+
+  .web-tier-banner.t1 { background: var(--tier1-bg); border: 1px solid rgba(0,168,107,0.3); }
+  .web-tier-banner.t2 { background: var(--tier2-bg); border: 1px solid rgba(245,166,35,0.3); }
+  .web-tier-banner.t3 { background: var(--tier3-bg); border: 1px solid rgba(224,62,62,0.3); }
+
+  .web-form { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+
+  .web-field label {
+    display: block;
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--gray-600);
+    margin-bottom: 6px;
+    text-transform: uppercase;
+    letter-spacing: 0.3px;
+  }
+
+  .web-field input {
+    width: 100%;
+    padding: 10px 14px;
+    border: 1.5px solid var(--gray-200);
+    border-radius: 8px;
+    font-size: 14px;
+    font-family: 'DM Sans', sans-serif;
+    color: var(--gray-800);
+    background: white;
+    transition: border-color 0.2s;
+  }
+
+  .web-field input:focus { outline: none; border-color: var(--itau-blue-mid); }
+
+  .web-field.full { grid-column: 1 / -1; }
+
+  .web-submit-row {
+    grid-column: 1 / -1;
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 12px;
+    margin-top: 8px;
+  }
+
+  .web-btn-primary {
+    background: var(--itau-orange);
+    color: white;
+    border: none;
+    border-radius: 8px;
+    padding: 11px 24px;
+    font-size: 14px;
+    font-weight: 700;
+    cursor: pointer;
+    font-family: 'DM Sans', sans-serif;
+    transition: all 0.2s;
+    box-shadow: 0 4px 12px rgba(236,112,0,0.25);
+  }
+  .web-btn-primary:hover { transform: translateY(-1px); box-shadow: 0 6px 16px rgba(236,112,0,0.35); }
+
+  .web-btn-sec {
+    background: transparent;
+    color: var(--gray-600);
+    border: 1.5px solid var(--gray-200);
+    border-radius: 8px;
+    padding: 11px 20px;
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+    font-family: 'DM Sans', sans-serif;
+  }
+
+  /* ── ANNOTATIONS ── */
+  .annotation {
+    position: absolute;
+    background: rgba(0,77,179,0.9);
+    color: white;
+    font-size: 10px;
+    font-weight: 700;
+    padding: 4px 8px;
+    border-radius: 4px;
+    pointer-events: none;
+    white-space: nowrap;
+    z-index: 50;
+  }
+
+  /* ── FOOTER ── */
+  .content-footer {
+    padding: 24px 32px;
+    border-top: 1px solid rgba(255,255,255,0.06);
+    background: #0D1B2A;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+
+  .footer-credit {
+    font-size: 12px;
+    color: rgba(255,255,255,0.3);
+  }
+
+  .footer-paper-link {
+    font-size: 12px;
+    color: rgba(100,150,255,0.7);
+    font-weight: 500;
+  }
+
+  /* Scrollbar */
+  ::-webkit-scrollbar { width: 4px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); border-radius: 2px; }
+
+  @media (max-width: 900px) {
+    .main-content { grid-template-columns: 1fr; }
+    .sidebar { position: static; min-height: auto; }
+    .device-row { flex-direction: column; }
+  }
+</style>
+</head>
+<body>
+
+<div class="app-shell">
+
+  <!-- TOP BAR -->
+  <div class="top-bar">
+    <div class="logo-area">
+      <div class="itau-logo">itaú</div>
+      <div class="logo-text">
+        <strong>Authentication Redesign</strong>
+        Behaviorally-Informed System Prototype
+      </div>
+    </div>
+    <div class="top-bar-right">
+      <span class="badge-prototype">Research Prototype</span>
+    </div>
+  </div>
+
+  <div class="main-content">
+
+    <!-- SIDEBAR -->
+    <div class="sidebar">
+      <div class="sidebar-section">
+        <div class="sidebar-label">Scenarios</div>
+
+        <button class="scenario-btn t1 active" onclick="loadScenario('t1_balance')">
+          <div class="scenario-icon">📊</div>
+          <div class="scenario-info">
+            <div class="scenario-name">View Balance</div>
+            <div class="scenario-desc">Trusted device · Routine operation</div>
+          </div>
+          <span class="tier-pill t1">Tier 1</span>
+        </button>
+
+        <button class="scenario-btn t1" onclick="loadScenario('t1_small_pix')">
+          <div class="scenario-icon">💸</div>
+          <div class="scenario-info">
+            <div class="scenario-name">Pix R$150</div>
+            <div class="scenario-desc">Known contact · Within pattern</div>
+          </div>
+          <span class="tier-pill t1">Tier 1</span>
+        </button>
+
+        <button class="scenario-btn t2" onclick="loadScenario('t2_pix')">
+          <div class="scenario-icon">💳</div>
+          <div class="scenario-info">
+            <div class="scenario-name">Pix R$800</div>
+            <div class="scenario-desc">New recipient · Above avg. value</div>
+          </div>
+          <span class="tier-pill t2">Tier 2</span>
+        </button>
+
+        <button class="scenario-btn t3" onclick="loadScenario('t3_transfer')">
+          <div class="scenario-icon">🔐</div>
+          <div class="scenario-info">
+            <div class="scenario-name">Wire R$12.000</div>
+            <div class="scenario-desc">High value · New payee · Anomalous</div>
+          </div>
+          <span class="tier-pill t3">Tier 3</span>
+        </button>
+
+        <button class="scenario-btn t3" onclick="loadScenario('t3_new_device')">
+          <div class="scenario-icon">📱</div>
+          <div class="scenario-info">
+            <div class="scenario-name">New Device</div>
+            <div class="scenario-desc">Trust building · Transparent timeline</div>
+          </div>
+          <span class="tier-pill t3">Tier 3</span>
+        </button>
+      </div>
+
+      <div class="sidebar-section">
+        <div class="sidebar-label">View</div>
+        <div class="view-toggle">
+          <button class="view-btn active" onclick="setView('mobile', this)">📱 Mobile</button>
+          <button class="view-btn" onclick="setView('web', this)">🖥 Web</button>
+        </div>
+      </div>
+
+      <div class="sidebar-section" style="border:none">
+        <div class="sidebar-label">System Principles</div>
+        <div style="padding: 4px;">
+          <div class="signal-row">
+            <div class="signal-dot green"></div>
+            <div class="signal-text" style="color:rgba(255,255,255,0.5); font-size:11px;">Friction ∝ Risk Level</div>
+          </div>
+          <div class="signal-row">
+            <div class="signal-dot green"></div>
+            <div class="signal-text" style="color:rgba(255,255,255,0.5); font-size:11px;">Deliberate Pause for Tier 3</div>
+          </div>
+          <div class="signal-row">
+            <div class="signal-dot green"></div>
+            <div class="signal-text" style="color:rgba(255,255,255,0.5); font-size:11px;">Transparent Trust Building</div>
+          </div>
+          <div class="signal-row">
+            <div class="signal-dot green"></div>
+            <div class="signal-text" style="color:rgba(255,255,255,0.5); font-size:11px;">Out-of-Band Confirmation</div>
+          </div>
+          <div class="signal-row" style="border:none;">
+            <div class="signal-dot green"></div>
+            <div class="signal-text" style="color:rgba(255,255,255,0.5); font-size:11px;">Remote Recovery Paths</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- CONTENT -->
+    <div class="content-area">
+
+      <!-- MOBILE VIEW -->
+      <div class="view-panel active" id="view-mobile">
+        <div class="device-row">
+
+          <div class="device-container">
+            <div class="device-label">Primary Device — Itaú App</div>
+            <div class="phone-frame">
+              <div class="phone-notch"></div>
+              <div class="phone-screen" id="mobile-screen">
+
+                <!-- T1 BALANCE -->
+                <div class="screen active" id="screen-t1_balance">
+                  <div class="status-bar">
+                    <span class="status-time">09:42</span>
+                    <span class="status-icons">●●● WiFi 🔋</span>
+                  </div>
+                  <div class="screen-header">
+                    <div class="back-btn">←</div>
+                    <div class="screen-title">Conta Corrente</div>
+                  </div>
+                  <div class="screen-body">
+                    <div class="tier-indicator t1">
+                      <div class="tier-dot"></div>
+                      <div class="tier-indicator-text">
+                        <div class="tier-indicator-label">TIER 1 — PASSIVE</div>
+                        <div class="tier-indicator-detail">Dispositivo confiável · Operação rotineira · Nenhuma verificação adicional necessária</div>
+                      </div>
+                    </div>
+                    <div class="card">
+                      <div class="amount-display">
+                        <div class="amount-label">Saldo disponível</div>
+                        <div class="amount-value"><span class="currency">R$ </span>8.432,50</div>
+                      </div>
+                    </div>
+                    <div class="card">
+                      <div class="card-header"><div class="card-title">Últimas movimentações</div></div>
+                      <div class="card-body">
+                        <div class="field-row">
+                          <div class="field-label">iFood · Ontem</div>
+                          <div class="field-value" style="color:#E03E3E">− R$ 38,90</div>
+                        </div>
+                        <div class="field-row">
+                          <div class="field-label">Salário · 05/03</div>
+                          <div class="field-value" style="color:#00A86B">+ R$ 6.200,00</div>
+                        </div>
+                        <div class="field-row">
+                          <div class="field-label">Supermercado · 04/03</div>
+                          <div class="field-value" style="color:#E03E3E">− R$ 213,40</div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                  <div class="action-bar">
+                    <button class="btn-primary">Transferir</button>
+                    <button class="btn-secondary">Pix</button>
+                  </div>
+                </div>
+
+                <!-- T1 SMALL PIX -->
+                <div class="screen" id="screen-t1_small_pix">
+                  <div class="status-bar">
+                    <span class="status-time">09:44</span>
+                    <span class="status-icons">●●● WiFi 🔋</span>
+                  </div>
+                  <div class="screen-header">
+                    <div class="back-btn">←</div>
+                    <div class="screen-title">Confirmar Pix</div>
+                  </div>
+                  <div class="screen-body">
+                    <div class="tier-indicator t1">
+                      <div class="tier-dot"></div>
+                      <div class="tier-indicator-text">
+                        <div class="tier-indicator-label">TIER 1 — PASSIVE</div>
+                        <div class="tier-indicator-detail">Contato conhecido · Valor dentro do padrão · Aprovação automática</div>
+                      </div>
+                    </div>
+                    <div class="card">
+                      <div class="amount-display">
+                        <div class="amount-label">Você vai enviar</div>
+                        <div class="amount-value"><span class="currency">R$ </span>150,00</div>
+                      </div>
+                    </div>
+                    <div class="card">
+                      <div class="card-body">
+                        <div class="field-row">
+                          <div class="field-label">Para</div>
+                          <div class="field-value">Carlos Menezes</div>
+                        </div>
+                        <div class="field-row">
+                          <div class="field-label">Chave Pix</div>
+                          <div class="field-value">carlos@email.com</div>
+                        </div>
+                        <div class="field-row">
+                          <div class="field-label">Banco</div>
+                          <div class="field-value">Nubank</div>
+                        </div>
+                        <div class="field-row" style="border:none">
+                          <div class="field-label">Histórico</div>
+                          <div class="field-value" style="color:#00A86B">12 transferências ✓</div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                  <div class="action-bar">
+                    <button class="btn-primary">Confirmar Pix</button>
+                    <button class="btn-secondary">Cancelar</button>
+                  </div>
+                </div>
+
+                <!-- T2 PIX -->
+                <div class="screen" id="screen-t2_pix">
+                  <div class="status-bar">
+                    <span class="status-time">14:23</span>
+                    <span class="status-icons">●●● WiFi 🔋</span>
+                  </div>
+                  <div class="screen-header">
+                    <div class="back-btn">←</div>
+                    <div class="screen-title">Verificar Identidade</div>
+                  </div>
+                  <div class="screen-body">
+                    <div class="tier-indicator t2">
+                      <div class="tier-dot"></div>
+                      <div class="tier-indicator-text">
+                        <div class="tier-indicator-label">TIER 2 — LIGHTWEIGHT</div>
+                        <div class="tier-indicator-detail">Destinatário novo · R$800 acima da média · Biometria rápida</div>
+                      </div>
+                    </div>
+                    <div class="biometric-screen">
+                      <div class="fingerprint-ring">👆</div>
+                      <div class="biometric-title">Confirme com sua digital</div>
+                      <div class="biometric-sub">Esta transferência é para um novo destinatário.<br>Uma confirmação rápida é suficiente.</div>
+                    </div>
+                    <div class="card" style="margin-top: 0">
+                      <div class="card-body">
+                        <div class="field-row">
+                          <div class="field-label">Para</div>
+                          <div class="field-value">Ana Paula Costa</div>
+                        </div>
+                        <div class="field-row" style="border:none">
+                          <div class="field-label">Valor</div>
+                          <div class="field-value">R$ 800,00</div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                  <div class="action-bar">
+                    <button class="btn-primary">Usar Digital</button>
+                    <button class="btn-secondary">Face ID</button>
+                  </div>
+                </div>
+
+                <!-- T3 TRANSFER -->
+                <div class="screen" id="screen-t3_transfer">
+                  <div class="status-bar">
+                    <span class="status-time">19:07</span>
+                    <span class="status-icons">●●● WiFi 🔋</span>
+                  </div>
+                  <div class="screen-header">
+                    <div class="back-btn">←</div>
+                    <div class="screen-title">Verificação Crítica</div>
+                  </div>
+                  <div class="screen-body">
+                    <div class="tier-indicator t3">
+                      <div class="tier-dot"></div>
+                      <div class="tier-indicator-text">
+                        <div class="tier-indicator-label">TIER 3 — DELIBERATE PAUSE</div>
+                        <div class="tier-indicator-detail">Alto valor · Destinatário novo · Padrão incomum detectado</div>
+                      </div>
+                    </div>
+                    <div class="countdown-container">
+                      <div class="countdown-title">⏱ Pausando para sua proteção</div>
+                      <div class="countdown-number" id="countdown-num">47</div>
+                      <div class="countdown-sub">Enviamos uma notificação para<br><strong>••• (11) 9 ••••-4892</strong><br>Confirme no outro dispositivo para continuar.</div>
+                    </div>
+                    <div class="notification-preview">
+                      <div class="notif-icon">🏦</div>
+                      <div class="notif-body">
+                        <div class="notif-app">ITAÚ SEGURANÇA · AGORA</div>
+                        <div class="notif-text">Transferência R$12.000 para Empresa XYZ Ltda? Toque para revisar e confirmar.</div>
+                      </div>
+                    </div>
+                    <div class="card">
+                      <div class="card-body">
+                        <div class="field-row">
+                          <div class="field-label">Valor</div>
+                          <div class="field-value" style="color:#E03E3E; font-size:15px;">R$ 12.000,00</div>
+                        </div>
+                        <div class="field-row" style="border:none">
+                          <div class="field-label">Destinatário</div>
+                          <div class="field-value">Empresa XYZ Ltda</div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                  <div class="action-bar">
+                    <button class="btn-danger">Cancelar Operação</button>
+                  </div>
+                </div>
+
+                <!-- T3 NEW DEVICE -->
+                <div class="screen" id="screen-t3_new_device">
+                  <div class="status-bar">
+                    <span class="status-time">10:15</span>
+                    <span class="status-icons">●●● 5G 🔋</span>
+                  </div>
+                  <div class="screen-header">
+                    <div class="back-btn">←</div>
+                    <div class="screen-title">Novo Dispositivo</div>
+                  </div>
+                  <div class="screen-body">
+                    <div class="tier-indicator t3">
+                      <div class="tier-dot"></div>
+                      <div class="tier-indicator-text">
+                        <div class="tier-indicator-label">DISPOSITIVO PROVISÓRIO</div>
+                        <div class="tier-indicator-detail">Registrado há 2h · Período de confiança ativo · 22h restantes</div>
+                      </div>
+                    </div>
+                    <div class="card">
+                      <div class="card-header"><div class="card-title">Construção de Confiança</div></div>
+                      <div class="card-body">
+                        <div style="margin-bottom: 12px;">
+                          <div class="risk-label-row">
+                            <span class="risk-label">Nível de confiança do dispositivo</span>
+                            <span class="risk-value" style="color:#F5A623;">38%</span>
+                          </div>
+                          <div class="risk-bar-bg">
+                            <div class="risk-bar-fill" style="width:38%; background: linear-gradient(90deg, #F5A623, #FFD166);"></div>
+                          </div>
+                        </div>
+                        <div class="field-row">
+                          <div class="field-label">Confiança plena em</div>
+                          <div class="field-value">22 horas</div>
+                        </div>
+                        <div class="field-row" style="border:none">
+                          <div class="field-label">Limite atual (Pix)</div>
+                          <div class="field-value">R$ 500,00</div>
+                        </div>
+                      </div>
+                    </div>
+                    <div class="card" style="border: 1.5px solid rgba(0,77,179,0.3); background: var(--itau-blue-light);">
+                      <div class="card-body">
+                        <div style="font-size:13px; font-weight:700; color: var(--itau-blue); margin-bottom:6px;">⚡ Ativar confiança agora</div>
+                        <div style="font-size:12px; color: var(--gray-600); line-height:1.5; margin-bottom:12px;">Faça uma verificação por vídeo de 5 minutos para liberar limites completos imediatamente.</div>
+                        <button class="btn-primary" style="width:100%; padding: 11px;">Iniciar Verificação por Vídeo</button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+              </div><!-- phone-screen -->
+            </div><!-- phone-frame -->
+          </div><!-- device-container -->
+
+          <!-- EXPLANATION PANEL -->
+          <div class="explanation-panel" id="explanation-panel">
+            <!-- populated by JS -->
+          </div>
+
+        </div>
+      </div><!-- view-mobile -->
+
+      <!-- WEB VIEW -->
+      <div class="view-panel" id="view-web">
+        <div class="browser-frame">
+          <div class="browser-bar">
+            <div class="browser-dots">
+              <div class="browser-dot"></div>
+              <div class="browser-dot"></div>
+              <div class="browser-dot"></div>
+            </div>
+            <div class="browser-url">
+              <span class="lock">🔒</span>
+              bankline.itau.com.br/transferencias
+            </div>
+          </div>
+          <div class="web-content">
+            <div class="web-topbar">
+              <div class="web-logo">
+                <div class="web-logo-mark">itaú</div>
+                <span class="web-logo-name">Itaú Bankline</span>
+              </div>
+              <div class="web-nav">
+                <a href="#">Início</a>
+                <a href="#" class="active">Transferências</a>
+                <a href="#">Pagamentos</a>
+                <a href="#">Extrato</a>
+                <a href="#">Investimentos</a>
+              </div>
+              <div class="web-user">
+                <div class="web-avatar">BR</div>
+                <span style="font-size:13px; font-weight:600;">Bernardo R.</span>
+              </div>
+            </div>
+            <div class="web-body">
+              <div class="web-sidebar">
+                <div class="web-menu-item">📊 Dashboard</div>
+                <div class="web-menu-item active">💸 Transferências</div>
+                <div class="web-menu-item">📱 Pix</div>
+                <div class="web-menu-item">📄 Pagamentos</div>
+                <div class="web-menu-item">📈 Extrato</div>
+                <div class="web-menu-item">⚙️ Configurações</div>
+                <div style="margin: 20px 16px 0; padding: 12px; background: white; border-radius: 8px; border: 1px solid var(--gray-200);">
+                  <div style="font-size:10px; font-weight:700; color: var(--gray-400); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 8px;">Nível de sessão</div>
+                  <div class="risk-bar-bg" style="background: var(--gray-200);">
+                    <div class="risk-bar-fill" style="width: 72%; background: linear-gradient(90deg, #003087, #004DB3);"></div>
+                  </div>
+                  <div style="font-size:11px; color: var(--gray-400); margin-top:6px;">Sessão verificada · 72% confiança</div>
+                </div>
+              </div>
+              <div class="web-main" id="web-main-content">
+                <!-- populated by JS -->
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="device-row" style="gap:20px; flex-wrap: wrap;">
+          <div class="explanation-panel" id="web-explanation-panel" style="max-width: 100%; flex: 1; min-width: 300px;">
+          </div>
+        </div>
+      </div><!-- view-web -->
+
+    </div><!-- content-area -->
+  </div><!-- main-content -->
+
+  <div class="content-footer">
+    <div class="footer-credit">Carvalho, B.R.O. (2026) · Behaviorally-Informed Authentication Design · Research Prototype</div>
+    <div class="footer-paper-link">Based on: "Digital Security as a Human Problem, Not a Technical One" · SSRN</div>
+  </div>
+
+</div><!-- app-shell -->
+
+<script>
+let currentScenario = 't1_balance';
+let countdownInterval = null;
+
+const scenarios = {
+  t1_balance: {
+    tier: 1,
+    title: 'Tier 1 — Passive Authentication',
+    riskScore: 8,
+    signals: [
+      { dot: 'green', label: 'Device trust score', value: '94% (48d)' },
+      { dot: 'green', label: 'Operation type', value: 'Read-only' },
+      { dot: 'green', label: 'Session context', value: 'Active, 3min' },
+      { dot: 'green', label: 'Behavioral pattern', value: 'Within norm' },
+    ],
+    principles: ['Friction ∝ Risk', 'Preserve Attention'],
+    quote: 'When the secure choice is the easy choice, users take it automatically.',
+    why: 'Viewing a balance poses no material risk — no funds can be moved, no data can be altered. The current iToken system would still require verification here. This design does not, preserving the informational value of authentication requests for moments that actually matter.',
+    webTitle: 'Extrato e Saldo',
+    webTier: 't1',
+    webTierLabel: 'TIER 1 — Passive · Sem verificação adicional necessária',
+    webFields: [
+      { label: 'Conta', value: '0001 · 12345-6', full: false },
+      { label: 'Período', value: 'Março 2026', full: false },
+    ]
+  },
+  t1_small_pix: {
+    tier: 1,
+    title: 'Tier 1 — Known Recipient, Low Value',
+    riskScore: 14,
+    signals: [
+      { dot: 'green', label: 'Recipient history', value: '12 prior txns' },
+      { dot: 'green', label: 'Amount vs. avg', value: 'R$150 (avg R$280)' },
+      { dot: 'green', label: 'Device trust score', value: '94%' },
+      { dot: 'green', label: 'Time of day', value: 'Business hours' },
+    ],
+    principles: ['Friction ∝ Risk', 'Behavioral Baseline'],
+    quote: 'Habituation to high-frequency authentication eliminates deliberate processing. Tier 1 routes preserve cognitive resources for genuine risk moments.',
+    why: 'A Pix to a contact with 12 prior transactions at a below-average value presents minimal risk. Requiring biometric confirmation here would be the equivalent of checking your passport to enter your own home — technically thorough, behaviorally counterproductive.',
+    webTitle: 'Confirmar Pix',
+    webTier: 't1',
+    webTierLabel: 'TIER 1 — Contato conhecido · Aprovação direta',
+    webFields: [
+      { label: 'Destinatário', value: 'Carlos Menezes', full: false },
+      { label: 'Valor', value: 'R$ 150,00', full: false },
+      { label: 'Chave Pix', value: 'carlos@email.com', full: true },
+    ]
+  },
+  t2_pix: {
+    tier: 2,
+    title: 'Tier 2 — Lightweight Biometric',
+    riskScore: 48,
+    signals: [
+      { dot: 'yellow', label: 'Recipient history', value: '0 prior txns' },
+      { dot: 'yellow', label: 'Amount vs. avg', value: 'R$800 (1.8× avg)' },
+      { dot: 'green', label: 'Device trust score', value: '94%' },
+      { dot: 'green', label: 'Time of day', value: 'Business hours' },
+    ],
+    principles: ['Proportional Friction', 'Cognitive Pause'],
+    quote: 'A well-designed verification step does not require significant effort; it requires a brief interruption that shifts the user from automatic to deliberate processing.',
+    why: 'Two modest risk signals — a new recipient and above-average value — justify a lightweight friction point. A single biometric confirmation takes under 3 seconds and creates enough cognitive interruption to allow anomaly detection, without the friction cost of a full out-of-band verification.',
+    webTitle: 'Confirmar Identidade — Pix R$800',
+    webTier: 't2',
+    webTierLabel: 'TIER 2 — Destinatário novo · Confirmação biométrica necessária',
+    webFields: [
+      { label: 'Destinatário', value: 'Ana Paula Costa', full: false },
+      { label: 'Valor', value: 'R$ 800,00', full: false },
+      { label: 'Banco', value: 'Banco do Brasil', full: false },
+      { label: 'Chave', value: '(11) 99123-4567', full: false },
+    ]
+  },
+  t3_transfer: {
+    tier: 3,
+    title: 'Tier 3 — Deliberate Pause + Out-of-Band',
+    riskScore: 91,
+    signals: [
+      { dot: 'red', label: 'Transaction value', value: 'R$12.000 (high)' },
+      { dot: 'red', label: 'Recipient history', value: 'First transaction' },
+      { dot: 'red', label: 'Time anomaly', value: '19:07 (off-hours)' },
+      { dot: 'yellow', label: 'Device trust score', value: '94%' },
+    ],
+    principles: ['Deliberate Pause', 'Out-of-Band', 'Break Urgency State'],
+    quote: 'An attacker who has manipulated a user into initiating a fraudulent transfer cannot maintain the psychological pressure required to prevent the user from recognizing the anomaly during a 60-second deliberate pause.',
+    why: 'Three high-risk signals trigger Tier 3. The 60-second pause and out-of-band notification are not primarily cryptographic controls — they are behavioral interventions. Social engineering depends on urgency. The pause deliberately breaks the urgency state, giving the prefrontal cortex time to re-engage and evaluate the operation.',
+    webTitle: 'Verificação Crítica — TED R$12.000',
+    webTier: 't3',
+    webTierLabel: 'TIER 3 — Alto risco · Verificação fora de banda obrigatória',
+    webFields: [
+      { label: 'Destinatário', value: 'Empresa XYZ Ltda', full: false },
+      { label: 'Valor', value: 'R$ 12.000,00', full: false },
+      { label: 'CNPJ', value: '12.345.678/0001-99', full: false },
+      { label: 'Banco', value: 'Bradesco · Ag. 1234', full: false },
+    ]
+  },
+  t3_new_device: {
+    tier: 3,
+    title: 'Tier 3 — Transparent Trust Building',
+    riskScore: 62,
+    signals: [
+      { dot: 'yellow', label: 'Device age', value: '2 hours' },
+      { dot: 'yellow', label: 'Trust score', value: '38% (provisional)' },
+      { dot: 'green', label: 'User identity', value: 'Verified (video)' },
+      { dot: 'green', label: 'Account standing', value: 'No flags' },
+    ],
+    principles: ['Transparent Trust', 'Agency Over Process', 'No Opaque Waiting'],
+    quote: 'A user who understands that their new device will be in a provisional trust state for 72 hours — with ability to accelerate through an active step — is in a fundamentally different cognitive position than a user told to "wait until the system figures it out."',
+    why: 'The Reclame Aqui case that opens the design document describes a user told to wait indefinitely for "the system to learn" who they are. This redesign replaces opacity with transparency: the trust state is visible, the timeline is explicit, and the user has an active path to accelerate it. This is the behavioral principle of agency — users who understand a system engage with it; users who cannot understand it avoid it.',
+    webTitle: 'Novo Dispositivo — Construção de Confiança',
+    webTier: 't3',
+    webTierLabel: 'TIER 3 — Dispositivo provisório · Timeline explícita de confiança',
+    webFields: [
+      { label: 'Dispositivo', value: 'iPhone 15 Pro', full: false },
+      { label: 'Registrado em', value: 'Hoje, 08:12', full: false },
+    ]
+  }
+};
+
+function loadScenario(id) {
+  currentScenario = id;
+
+  // Update sidebar active state
+  document.querySelectorAll('.scenario-btn').forEach(b => b.classList.remove('active'));
+  event.currentTarget.classList.add('active');
+
+  // Show correct mobile screen
+  document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+  const target = document.getElementById('screen-' + id);
+  if (target) target.classList.add('active');
+
+  // Update explanation
+  renderExplanation();
+  renderWebView();
+
+  // Start countdown if t3_transfer
+  if (countdownInterval) clearInterval(countdownInterval);
+  if (id === 't3_transfer') startCountdown();
+}
+
+function startCountdown() {
+  let n = 47;
+  const el = document.getElementById('countdown-num');
+  if (!el) return;
+  el.textContent = n;
+  countdownInterval = setInterval(() => {
+    n--;
+    if (n <= 0) { n = 60; }
+    if (el) el.textContent = n;
+  }, 1000);
+}
+
+function renderExplanation() {
+  const sc = scenarios[currentScenario];
+  const tierColors = { 1: '#00A86B', 2: '#F5A623', 3: '#E03E3E' };
+  const tierBgs = { 1: 'rgba(0,168,107,0.15)', 2: 'rgba(245,166,35,0.15)', 3: 'rgba(224,62,62,0.15)' };
+
+  const signalsHtml = sc.signals.map(s =>
+    `<div class="signal-row">
+      <div class="signal-dot ${s.dot}"></div>
+      <div class="signal-text">${s.label}</div>
+      <div class="signal-val">${s.value}</div>
+    </div>`
+  ).join('');
+
+  const tagsHtml = sc.principles.map(p =>
+    `<span class="principle-tag">${p}</span>`
+  ).join('');
+
+  const html = `
+    <div class="exp-card">
+      <div class="exp-title">
+        <div class="exp-icon" style="background:${tierBgs[sc.tier]}; color:${tierColors[sc.tier]};">▲</div>
+        ${sc.title}
+      </div>
+
+      <div class="risk-meter">
+        <div class="risk-label-row">
+          <span class="risk-label">Composite Risk Score</span>
+          <span class="risk-value" style="color:${tierColors[sc.tier]}">${sc.riskScore} / 100</span>
+        </div>
+        <div class="risk-bar-bg">
+          <div class="risk-bar-fill" style="width:${sc.riskScore}%; background: linear-gradient(90deg, ${tierColors[sc.tier]}88, ${tierColors[sc.tier]});"></div>
+        </div>
+      </div>
+
+      ${signalsHtml}
+    </div>
+
+    <div class="exp-card">
+      <div class="exp-title" style="margin-bottom:10px;">
+        <div class="exp-icon" style="background:rgba(0,77,179,0.2); color:#7EB6FF;">◆</div>
+        Design Rationale
+      </div>
+      <div style="font-size:12px; color:rgba(255,255,255,0.55); line-height:1.7; margin-bottom:14px;">${sc.why}</div>
+      <div>${tagsHtml}</div>
+      <div class="quote-block">
+        <div class="quote-text">${sc.quote}</div>
+        <div class="quote-source">— Carvalho (2025) / Digital Security as a Human Problem</div>
+      </div>
+    </div>
+  `;
+
+  const panel = document.getElementById('explanation-panel');
+  if (panel) panel.innerHTML = html;
+  const webPanel = document.getElementById('web-explanation-panel');
+  if (webPanel) webPanel.innerHTML = html;
+}
+
+function renderWebView() {
+  const sc = scenarios[currentScenario];
+  const tierColors = { 1: '#00A86B', 2: '#D4820A', 3: '#E03E3E' };
+
+  const fieldsHtml = sc.webFields.map(f =>
+    `<div class="web-field ${f.full ? 'full' : ''}">
+      <label>${f.label}</label>
+      <input type="text" value="${f.value}" readonly>
+    </div>`
+  ).join('');
+
+  let actionHtml = '';
+  if (sc.tier === 1) {
+    actionHtml = `<button class="web-btn-primary">Confirmar</button>`;
+  } else if (sc.tier === 2) {
+    actionHtml = `
+      <button class="web-btn-sec">Cancelar</button>
+      <button class="web-btn-primary">🔐 Confirmar com Biometria</button>
+    `;
+  } else {
+    actionHtml = `
+      <button class="web-btn-sec" style="color:#E03E3E; border-color:#E03E3E;">Cancelar Operação</button>
+      <button class="web-btn-primary" style="opacity:0.5; cursor:default;">Aguardando confirmação...</button>
+    `;
+  }
+
+  const html = `
+    <div class="web-page-title">${sc.webTitle}</div>
+    <div class="web-page-sub">Itaú Bankline · Transferências e Pagamentos</div>
+    <div class="web-tier-banner ${sc.webTier}">
+      <div style="width:10px; height:10px; border-radius:50%; background:${tierColors[sc.tier]}; flex-shrink:0; ${sc.tier===3 ? 'animation:pulse 1.5s infinite;' : ''}"></div>
+      <div style="font-size:12px; font-weight:700; color:${tierColors[sc.tier]};">${sc.webTierLabel}</div>
+    </div>
+    <div class="web-form">
+      ${fieldsHtml}
+      <div class="web-submit-row">${actionHtml}</div>
+    </div>
+  `;
+
+  const webMain = document.getElementById('web-main-content');
+  if (webMain) webMain.innerHTML = html;
+}
+
+function setView(view, btn) {
+  document.querySelectorAll('.view-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  document.querySelectorAll('.view-panel').forEach(p => p.classList.remove('active'));
+  document.getElementById('view-' + view).classList.add('active');
+}
+
+// Init
+renderExplanation();
+renderWebView();
+startCountdown();
+</script>
+</body>
+</html>
