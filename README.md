@@ -1,4 +1,4 @@
-# Behaviorally-Informed Authentication Design
+# Security That Works
 ### A Cognitive Redesign of Itaú's iToken Authentication System
 
 **Author:** Bernardo Rodrigues Oliveira Carvalho  
