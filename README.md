@@ -8,11 +8,41 @@
 
 ---
 
-## Overview
+## Live Pages
 
-This project argues that authentication failures in banking systems are not primarily technical problems — they are cognitive and organizational ones. Systems fail because they are designed for a user who does not exist: one with unlimited attention, no time pressure, and perfect rationality under stress.
+This repository has three interactive pages hosted on GitHub Pages.
+All run entirely in the browser — no installation, no backend.
 
-Using Itaú's iToken system as a case study, this research diagnoses four specific behavioral failure modes in the existing design and proposes a redesigned system grounded in cognitive science, behavioral economics, and human-in-the-loop security principles.
+### 🏠 [Landing Page](https://bernardo-r-o-carvalho.github.io/Itau-auth-redesing/)
+`index.html`
+
+Entry point for the project. Introduces the research question, presents the core argument, and links to the other two pages. Designed to be the URL you share when someone asks "what is this project?"
+
+---
+
+### 🔬 [Authentication Prototype](https://bernardo-r-o-carvalho.github.io/Itau-auth-redesing/itau_auth_prototype.html)
+`itau_auth_prototype.html`
+
+The main interactive prototype. Demonstrates the three-tier authentication model proposed in the paper:
+
+- **Tier 1 — Passive:** Routine operation on a trusted device. No additional auth prompt. The system approves silently, preserving the user's attentional resources for operations that actually warrant them.
+- **Tier 2 — Light biometric:** Mildly elevated risk signal (new payee, slightly above-baseline value). A single biometric confirmation (~3 seconds) is requested, with a visible explanation of why.
+- **Tier 3 — Deliberate pause:** High-value transfer, unknown recipient, or anomalous session. Activates a 60-second countdown and sends a push notification to the user's pre-registered secondary device. The operation only proceeds after out-of-band confirmation — the only mechanism that directly interrupts the urgency states created by social engineering attacks.
+
+Also demonstrates the **transparent device trust timeline** (Provisional → Standard status over 24–72h, with a fast-track video verification option) and a **risk score panel** showing the four signal categories in real time.
+
+---
+
+### 🧮 [Risk Calculator](https://bernardo-r-o-carvalho.github.io/Itau-auth-redesing/risk_calculator.html)
+`risk_calculator.html`
+
+Interactive companion to the paper's scoring model. Two modes:
+
+**Calculator mode** — fill in a transaction scenario (amount, recipient, device status, time of day, behavioral pattern, location) and see the resulting risk score, tier decision, and a breakdown of how each signal contributed. The explanation updates in real time as you adjust the inputs.
+
+**Signal Simulator mode** — adjust the six underlying signals independently via sliders to explore how they interact. Includes three pre-configured scenario presets: *Everyday use* (Tier 1), *Moderate signal* (Tier 2), and *Social engineering pattern* (Tier 3). Useful for presentations — lets you show an audience exactly which combination of signals crosses each threshold.
+
+The scoring model implements the architecture proposed in the paper: six weighted signals summing to a score from 0–100, with Tier 2 activating at ≥40 and Tier 3 at ≥70. Weights are documented inline in the source code.
 
 ---
 
@@ -20,9 +50,25 @@ Using Itaú's iToken system as a case study, this research diagnoses four specif
 
 | File | Description |
 |------|-------------|
-| [`Security That Works.md`](./Security%20That%20Works.md) | Full research paper with theoretical framework, diagnosis, and proposed redesign |
-| [`itau_auth_prototype.html`](./itau_auth_prototype.html) | Interactive prototype — open in browser to explore the redesigned system |
-| [`index.html`](./index.html) | Entry point / landing page for the prototype |
+| [`README.md`](./README.md) | This file |
+| [`Security That Works.md`](./Security%20That%20Works.md) | Full research paper |
+| [`index.html`](./index.html) | Landing page |
+| [`itau_auth_prototype.html`](./itau_auth_prototype.html) | Authentication prototype |
+| [`risk_calculator.html`](./risk_calculator.html) | Risk score calculator |
+
+---
+
+## The Research Paper
+
+> [`Security That Works.md`](./Security%20That%20Works.md)
+
+The paper covers:
+
+- **Empirical grounding:** FEBRABAN 2024 data (R$10.1B in banking fraud losses; +17% YoY) and attack-type distribution from the Ministério da Justiça
+- **Why cryptography is not the problem:** The three dominant fraud vectors (card cloning, false call centers, WhatsApp impersonation) all bypass cryptographic protections by manipulating the human operating them
+- **Cognitive mechanisms:** Prefrontal cortex resource constraints under urgency, Kahneman's dual-process framework applied to authentication prompts, and Cialdini's urgency model as the mechanism enabling social engineering
+- **The four failure modes of iToken:** Uniform friction, high-friction recovery paths, high-frequency authentication habituation, and opaque trust calibration
+- **Detailed redesign:** Tier thresholds, risk signal composition, recovery paths, and device trust timeline
 
 ---
 
@@ -39,84 +85,7 @@ The proposed redesign implements a **three-tier risk-calibrated authentication a
 
 ---
 
-## Prototype Features
-
-> Open [`itau_auth_prototype.html`](./itau_auth_prototype.html) directly in a browser — no installation required.
-
-The interactive prototype demonstrates three authentication scenarios corresponding to the three-tier model:
-
-### 🟢 Tier 1 — Passive Authentication
-**Scenario:** Routine operation on a trusted device (e.g., checking balance, routine Pix to a known contact).
-
-No additional authentication step is required. The system recognizes the device, the session context, and the operation's risk profile as within normal parameters. This is the most common tier and is deliberately frictionless to avoid habituation on low-stakes actions.
-
-**Behavioral principle:** Preserving attentional resources for the operations that actually warrant them.
-
----
-
-### 🟡 Tier 2 — Lightweight Authentication
-**Scenario:** Mildly elevated risk — new payee, or transaction value modestly above the user's baseline.
-
-A single biometric confirmation (approximately 3 seconds) is requested. The interface displays the specific reason the elevated check was triggered, giving the user an accurate mental model of the system rather than an opaque prompt.
-
-**Behavioral principle:** Friction proportional to risk preserves its informational signal — users learn that a Tier 2 prompt means something specific.
-
----
-
-### 🔴 Tier 3 — Deliberate Authentication with Pause
-**Scenario:** High-value transfer, new recipient, anomalous session pattern, or unrecognized device.
-
-The prototype demonstrates the two-channel deliberate pause mechanism:
-
-1. The primary device shows the operation details and a **60-second countdown**.
-2. A push notification is sent to the user's pre-registered secondary device with the full operation details (amount, recipient, timestamp).
-3. The operation only proceeds after explicit confirmation through the secondary channel.
-
-The 60-second pause is not an arbitrary delay — it is designed to break the urgency states that social engineering attacks rely on. An attacker guiding a victim through a fraudulent transfer via phone cannot maintain the psychological pressure required during a deliberate pause with a separate confirmation channel.
-
-**Behavioral principle:** Out-of-band secondary confirmation + deliberate pause = the only design feature that directly addresses the dominant attack vectors (false call centers, WhatsApp scams) that the current iToken system does not touch.
-
----
-
-### Transparent Device Trust Timeline
-New device registration displays an explicit progression to the user:
-
-- **Hours 0–24:** Provisional status — Tier 3 required for operations above R$500
-- **Hours 24–72:** Standard status reached after one verified Tier 3 operation
-- **Fast-track option:** Standard status immediately via 5-minute in-app video verification — no branch visit required
-
-This eliminates the opaque "the system is learning you" experience of the current iToken, replacing it with a user-controlled, time-bound process.
-
----
-
-### Risk Score Visualization
-The prototype includes an explanation panel alongside each scenario showing:
-
-- The real-time risk score driving the tier decision
-- The four signal categories contributing to the score: **device trust**, **transaction risk**, **session context**, and **behavioral anomaly**
-- The behavioral science principles underlying each design decision
-
-This panel is intended for research/presentation purposes and illustrates what the system's internal logic would look like if surfaced to the user.
-
----
-
-## The Research Paper
-
-> [`Security That Works.md`](./Security%20That%20Works.md)
-
-The full paper covers:
-
-- **Empirical grounding:** FEBRABAN 2024 data (R$10.1B in banking fraud losses; +17% YoY), Serasa Experian fraud estimates, and attack-type distribution from the Ministério da Justiça
-- **Attack vector analysis:** Why the three dominant fraud types (card cloning, false call centers, WhatsApp impersonation) all bypass cryptographic protections entirely by manipulating the human operating them
-- **Cognitive mechanisms:** Prefrontal cortex resource constraints, Kahneman's dual-process framework applied to authentication, and Cialdini's urgency model as the mechanism enabling social engineering
-- **Detailed redesign specification:** Tier thresholds, risk score composition, recovery paths, and device trust timeline
-- **Limitations:** Cold-start calibration problem, single-device equity considerations, and sophisticated adversarial baseline manipulation
-
----
-
 ## Related Work
-
-This project extends the theoretical framework developed in:
 
 > Carvalho, B.R.O. (2025). *Digital Security as a Human Problem, Not a Technical One.* SSRN Working Paper. [ssrn.com](https://ssrn.com)
 
@@ -124,10 +93,10 @@ This project extends the theoretical framework developed in:
 
 ## Disclaimer
 
-This is an independent academic research project conducted for educational and research purposes. It is **not affiliated with, endorsed by, or connected to Itaú Unibanco S.A.** in any way. All interface designs are hypothetical proposals. No proprietary data, internal systems, or confidential information were accessed or used. This work constitutes academic commentary on publicly observable design patterns, consistent with established practices in usable security research.
+This is an independent academic research project conducted for educational and research purposes. It is **not affiliated with, endorsed by, or connected to Itaú Unibanco S.A.** in any way. All interface designs are hypothetical proposals. No proprietary data, internal systems, or confidential information were accessed or used.
 
 ---
 
 ## License
 
-This work is shared for academic and educational purposes. If you use or reference it, please cite the author.
+Shared for academic and educational purposes. If you use or reference this work, please cite the author.
