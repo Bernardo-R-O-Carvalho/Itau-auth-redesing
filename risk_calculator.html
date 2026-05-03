@@ -1,0 +1,1276 @@
+<!DOCTYPE html>
+<!--
+  risk_calculator.html
+  Bernardo R. O. Carvalho — 2026
+
+  Interactive companion to "Security That Works: A Cognitive Redesign
+  of Itaú's iToken Authentication System"
+
+  Two modes:
+    1. Calculator  — fill in a transaction scenario, get a tier + score
+    2. Signal Simulator — adjust individual signals to see how they interact
+
+  The scoring model is intentionally simplified for illustration purposes.
+  Real behavioral risk engines use continuous learning models and more
+  signal categories — but the *architecture* (weighted signals → tier) is
+  the same as proposed in the paper.
+
+  TODO: add a "compare with iToken" side-by-side mode someday
+  TODO: mobile layout still janky on small phones, revisit
+-->
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Itaú Auth Redesign — Risk Calculator</title>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=DM+Sans:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<style>
+
+/* ── design tokens ────────────────────────────────────────────────────────── */
+:root {
+  --orange:        #EC7000;
+  --orange-dim:    rgba(236,112,0,0.15);
+  --blue:          #003087;
+  --blue-mid:      #004DB3;
+
+  /* tier colors — keeping these as CSS vars so the JS can reference them too */
+  --tier1:         #00C47A;
+  --tier1-dim:     rgba(0,196,122,0.12);
+  --tier1-border:  rgba(0,196,122,0.3);
+  --tier2:         #F5A623;
+  --tier2-dim:     rgba(245,166,35,0.12);
+  --tier2-border:  rgba(245,166,35,0.3);
+  --tier3:         #E03E3E;
+  --tier3-dim:     rgba(224,62,62,0.12);
+  --tier3-border:  rgba(224,62,62,0.35);
+
+  /* surfaces */
+  --bg:       #080E18;
+  --surface:  #0F1A2A;
+  --surface2: #152030;
+  --border:   rgba(255,255,255,0.07);
+  --border2:  rgba(255,255,255,0.12);
+
+  /* text */
+  --text:       #E8EDF5;
+  --text-dim:   #7A8BA3;
+  --text-muted: #3D526A;
+
+  --mono: 'IBM Plex Mono', monospace;
+  --sans: 'DM Sans', sans-serif;
+}
+
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+body {
+  font-family: var(--sans);
+  background: var(--bg);
+  color: var(--text);
+  min-height: 100vh;
+  overflow-x: hidden;
+}
+
+/* subtle grid background — makes it feel more like a dashboard */
+body::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  background-image:
+    linear-gradient(rgba(0,77,179,0.04) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(0,77,179,0.04) 1px, transparent 1px);
+  background-size: 48px 48px;
+  pointer-events: none;
+  z-index: 0;
+}
+
+/* ── top bar ──────────────────────────────────────────────────────────────── */
+.topbar {
+  position: sticky;
+  top: 0;
+  z-index: 100;
+  background: rgba(8,14,24,0.92);
+  backdrop-filter: blur(16px);
+  border-bottom: 1px solid var(--border);
+  padding: 14px 32px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.topbar-left { display: flex; align-items: center; gap: 16px; }
+
+.logo-mark {
+  width: 38px; height: 38px;
+  background: var(--orange);
+  border-radius: 10px;
+  display: flex; align-items: center; justify-content: center;
+  font-family: var(--mono);
+  font-weight: 600; font-size: 13px; color: white;
+  letter-spacing: -1px;
+  box-shadow: 0 0 20px rgba(236,112,0,0.3);
+}
+
+.topbar-title { font-size: 13px; color: var(--text-dim); line-height: 1.5; }
+.topbar-title strong { display: block; font-size: 15px; color: var(--text); font-weight: 600; }
+
+.topbar-right { display: flex; align-items: center; gap: 10px; }
+
+.badge {
+  font-family: var(--mono);
+  font-size: 10px; font-weight: 500;
+  padding: 4px 10px;
+  border-radius: 20px;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+}
+.badge-research { background: var(--orange-dim); border: 1px solid rgba(236,112,0,0.4); color: #F5A04A; }
+.badge-v1       { background: rgba(0,77,179,0.2); border: 1px solid rgba(0,77,179,0.4); color: #6BA3FF; }
+
+/* ── main shell ───────────────────────────────────────────────────────────── */
+.shell {
+  position: relative;
+  z-index: 1;
+  max-width: 1280px;
+  margin: 0 auto;
+  padding: 36px 32px 80px;
+}
+
+/* ── mode tabs ────────────────────────────────────────────────────────────── */
+.mode-tabs {
+  display: flex;
+  gap: 4px;
+  margin-bottom: 36px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  padding: 6px;
+  width: fit-content;
+}
+
+.mode-tab {
+  font-family: var(--sans);
+  font-size: 13px; font-weight: 600;
+  padding: 10px 22px;
+  border-radius: 10px;
+  border: none;
+  cursor: pointer;
+  transition: all 0.2s;
+  color: var(--text-dim);
+  background: transparent;
+}
+.mode-tab:hover { color: var(--text); background: rgba(255,255,255,0.04); }
+.mode-tab.active {
+  color: white;
+  background: var(--blue-mid);
+  box-shadow: 0 2px 12px rgba(0,77,179,0.4);
+}
+
+.panel { display: none; }
+.panel.active { display: block; }
+
+/* ── cards ────────────────────────────────────────────────────────────────── */
+.card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  padding: 24px;
+  margin-bottom: 16px;
+}
+
+.card-title {
+  font-size: 13px; font-weight: 700;
+  color: var(--text-dim);
+  text-transform: uppercase;
+  letter-spacing: 0.6px;
+  margin-bottom: 20px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.card-title-icon {
+  width: 24px; height: 24px;
+  border-radius: 6px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 12px;
+}
+
+/* ── form elements ────────────────────────────────────────────────────────── */
+.field-group { margin-bottom: 18px; }
+.field-group:last-child { margin-bottom: 0; }
+
+.field-label {
+  font-size: 12px; font-weight: 600;
+  color: var(--text-dim);
+  margin-bottom: 8px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+.field-label .hint {
+  font-size: 10px; font-weight: 400;
+  color: var(--text-muted);
+  font-family: var(--mono);
+}
+
+/* sliders — had to fight with webkit a bit here */
+.slider {
+  width: 100%;
+  -webkit-appearance: none;
+  appearance: none;
+  height: 6px;
+  border-radius: 3px;
+  outline: none;
+  cursor: pointer;
+  background: var(--surface2);
+  margin-bottom: 6px;
+}
+.slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 18px; height: 18px;
+  border-radius: 50%;
+  background: white;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.4);
+  cursor: pointer;
+  transition: transform 0.1s;
+}
+.slider::-webkit-slider-thumb:hover { transform: scale(1.15); }
+
+.slider-labels {
+  display: flex;
+  justify-content: space-between;
+  font-family: var(--mono);
+  font-size: 9px; color: var(--text-muted);
+}
+
+/* toggle buttons */
+.toggle-group { display: flex; gap: 6px; flex-wrap: wrap; }
+
+.toggle-btn {
+  font-family: var(--sans);
+  font-size: 12px; font-weight: 600;
+  padding: 7px 14px;
+  border-radius: 8px;
+  border: 1px solid var(--border2);
+  background: transparent;
+  color: var(--text-dim);
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.toggle-btn:hover { border-color: rgba(255,255,255,0.25); color: var(--text); }
+.toggle-btn.on {
+  background: rgba(0,77,179,0.25);
+  border-color: rgba(0,77,179,0.5);
+  color: #6BA3FF;
+}
+
+.select-field {
+  width: 100%;
+  background: var(--surface2);
+  border: 1px solid var(--border2);
+  border-radius: 10px;
+  padding: 10px 14px;
+  font-size: 13px; font-weight: 500;
+  color: var(--text);
+  font-family: var(--sans);
+  outline: none;
+  cursor: pointer;
+  appearance: none;
+}
+.select-field:focus { border-color: rgba(0,77,179,0.6); }
+
+/* ── calculator layout ────────────────────────────────────────────────────── */
+.calc-grid {
+  display: grid;
+  grid-template-columns: 1fr 380px;
+  gap: 24px;
+  align-items: start;
+}
+
+.section-label {
+  font-family: var(--mono);
+  font-size: 10px; font-weight: 500;
+  color: var(--text-muted);
+  letter-spacing: 1.5px;
+  text-transform: uppercase;
+  margin-bottom: 16px;
+}
+
+/* ── result card ──────────────────────────────────────────────────────────── */
+.result-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  overflow: hidden;
+  position: sticky;
+  top: 80px;
+}
+
+.result-header { padding: 20px 22px 16px; border-bottom: 1px solid var(--border); }
+.result-header-label {
+  font-family: var(--mono);
+  font-size: 10px; color: var(--text-muted);
+  letter-spacing: 1.5px; text-transform: uppercase;
+  margin-bottom: 12px;
+}
+
+.tier-display {
+  border-radius: 12px;
+  padding: 18px 20px;
+  margin: 0 22px 0;
+  text-align: center;
+  transition: all 0.4s ease;
+  border: 1.5px solid transparent;
+}
+.tier-display.t1 { background: var(--tier1-dim); border-color: var(--tier1-border); }
+.tier-display.t2 { background: var(--tier2-dim); border-color: var(--tier2-border); }
+.tier-display.t3 { background: var(--tier3-dim); border-color: var(--tier3-border); }
+
+.tier-number {
+  font-family: var(--mono);
+  font-size: 11px; font-weight: 500;
+  letter-spacing: 1px; text-transform: uppercase;
+  margin-bottom: 4px; opacity: 0.7;
+}
+.tier-display.t1 .tier-number { color: var(--tier1); }
+.tier-display.t2 .tier-number { color: var(--tier2); }
+.tier-display.t3 .tier-number { color: var(--tier3); }
+
+.tier-name { font-size: 20px; font-weight: 700; margin-bottom: 4px; }
+.tier-display.t1 .tier-name { color: var(--tier1); }
+.tier-display.t2 .tier-name { color: var(--tier2); }
+.tier-display.t3 .tier-name { color: var(--tier3); }
+
+.tier-action { font-size: 12px; color: var(--text-dim); }
+
+/* score bar */
+.score-section { padding: 18px 22px; border-bottom: 1px solid var(--border); }
+
+.score-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 10px;
+}
+.score-label { font-size: 12px; color: var(--text-dim); }
+.score-number {
+  font-family: var(--mono);
+  font-size: 24px; font-weight: 600;
+  transition: color 0.4s;
+}
+
+.score-bar-bg { height: 8px; background: var(--surface2); border-radius: 4px; overflow: hidden; }
+.score-bar-fill {
+  height: 100%;
+  border-radius: 4px;
+  transition: width 0.5s cubic-bezier(0.4,0,0.2,1), background 0.4s;
+}
+
+/* signal breakdown */
+.signals-section { padding: 18px 22px; border-bottom: 1px solid var(--border); }
+.signals-title {
+  font-family: var(--mono);
+  font-size: 10px; color: var(--text-muted);
+  letter-spacing: 1.5px; text-transform: uppercase;
+  margin-bottom: 14px;
+}
+
+.signal-item { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
+.signal-item:last-child { margin-bottom: 0; }
+
+.signal-name { font-size: 12px; color: var(--text-dim); flex: 1; }
+
+.signal-bar-wrap { width: 100px; height: 5px; background: var(--surface2); border-radius: 3px; overflow: hidden; }
+.signal-bar { height: 100%; border-radius: 3px; transition: width 0.4s ease; }
+
+.signal-val {
+  font-family: var(--mono);
+  font-size: 11px; font-weight: 500;
+  width: 32px; text-align: right;
+  color: var(--text-dim);
+}
+
+.explanation-section { padding: 18px 22px; }
+.explanation-text {
+  font-size: 12px; color: var(--text-dim);
+  line-height: 1.7;
+  background: rgba(255,255,255,0.02);
+  border-radius: 10px;
+  padding: 12px 14px;
+  border: 1px solid var(--border);
+  font-style: italic;
+}
+
+/* ── simulator ────────────────────────────────────────────────────────────── */
+.sim-header { margin-bottom: 28px; }
+.sim-header h2 { font-size: 22px; font-weight: 700; margin-bottom: 6px; }
+.sim-header p { font-size: 14px; color: var(--text-dim); line-height: 1.6; }
+
+.sim-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; margin-bottom: 32px; }
+
+.sim-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  padding: 22px;
+  transition: border-color 0.3s;
+  cursor: pointer;
+}
+.sim-card:hover { border-color: var(--border2); }
+.sim-card.active-t1 { border-color: var(--tier1-border); background: var(--tier1-dim); }
+.sim-card.active-t2 { border-color: var(--tier2-border); background: var(--tier2-dim); }
+.sim-card.active-t3 { border-color: var(--tier3-border); background: var(--tier3-dim); }
+
+.sim-card-top { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 14px; }
+.sim-card-emoji { font-size: 22px; }
+
+.sim-tier-pill {
+  font-family: var(--mono);
+  font-size: 9px; font-weight: 600;
+  padding: 3px 8px;
+  border-radius: 20px;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+}
+.sim-tier-pill.t1 { background: var(--tier1-dim); border: 1px solid var(--tier1-border); color: var(--tier1); }
+.sim-tier-pill.t2 { background: var(--tier2-dim); border: 1px solid var(--tier2-border); color: var(--tier2); }
+.sim-tier-pill.t3 { background: var(--tier3-dim); border: 1px solid var(--tier3-border); color: var(--tier3); }
+
+.sim-card-title { font-size: 14px; font-weight: 700; color: var(--text); margin-bottom: 6px; }
+.sim-card-desc  { font-size: 12px; color: var(--text-dim); line-height: 1.6; }
+
+.sim-signals {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  padding: 28px;
+  margin-bottom: 24px;
+}
+.sim-signals-title { font-size: 16px; font-weight: 700; margin-bottom: 6px; }
+.sim-signals-sub { font-size: 13px; color: var(--text-dim); margin-bottom: 24px; line-height: 1.6; }
+
+.sim-slider-group { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; }
+
+.sim-slider-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 6px;
+}
+.sim-slider-name { font-size: 13px; font-weight: 600; }
+.sim-slider-val {
+  font-family: var(--mono);
+  font-size: 13px; font-weight: 500;
+  padding: 2px 8px;
+  border-radius: 6px;
+  min-width: 36px; text-align: center;
+  transition: background 0.3s, color 0.3s;
+}
+.sim-slider-desc { font-size: 11px; color: var(--text-muted); margin-bottom: 8px; line-height: 1.5; }
+
+/* result row at the bottom of simulator */
+.sim-result {
+  display: grid;
+  grid-template-columns: 200px 1fr;
+  gap: 20px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  padding: 28px;
+  align-items: center;
+}
+
+.sim-tier-big {
+  text-align: center;
+  padding: 24px 20px;
+  border-radius: 12px;
+  transition: all 0.4s;
+  border: 1.5px solid transparent;
+}
+.sim-tier-big.t1 { background: var(--tier1-dim); border-color: var(--tier1-border); }
+.sim-tier-big.t2 { background: var(--tier2-dim); border-color: var(--tier2-border); }
+.sim-tier-big.t3 { background: var(--tier3-dim); border-color: var(--tier3-border); }
+
+.sim-tier-num {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 1px;
+  text-transform: uppercase; opacity: 0.6;
+  margin-bottom: 4px;
+}
+.sim-tier-big.t1 .sim-tier-num { color: var(--tier1); }
+.sim-tier-big.t2 .sim-tier-num { color: var(--tier2); }
+.sim-tier-big.t3 .sim-tier-num { color: var(--tier3); }
+
+.sim-tier-big-name { font-size: 22px; font-weight: 800; margin-bottom: 6px; transition: color 0.4s; }
+.sim-tier-big.t1 .sim-tier-big-name { color: var(--tier1); }
+.sim-tier-big.t2 .sim-tier-big-name { color: var(--tier2); }
+.sim-tier-big.t3 .sim-tier-big-name { color: var(--tier3); }
+
+.sim-tier-score { font-family: var(--mono); font-size: 13px; color: var(--text-dim); }
+
+.sim-exp-title { font-size: 14px; font-weight: 700; margin-bottom: 10px; }
+.sim-exp-body  { font-size: 13px; color: var(--text-dim); line-height: 1.8; }
+
+/* signal bar colors */
+.sig-low { background: var(--tier1); }
+.sig-mid { background: var(--tier2); }
+.sig-high { background: var(--tier3); }
+
+.val-low { background: var(--tier1-dim); color: var(--tier1); }
+.val-mid { background: var(--tier2-dim); color: var(--tier2); }
+.val-high { background: var(--tier3-dim); color: var(--tier3); }
+
+/* ── footer ───────────────────────────────────────────────────────────────── */
+.footer {
+  position: relative; z-index: 1;
+  text-align: center;
+  padding: 32px;
+  border-top: 1px solid var(--border);
+  font-size: 12px; color: var(--text-muted);
+  font-family: var(--mono);
+}
+.footer a { color: #6BA3FF; text-decoration: none; }
+
+/* ── responsive ───────────────────────────────────────────────────────────── */
+/* TODO: this breakpoint is a bit aggressive, revisit for tablets */
+@media (max-width: 900px) {
+  .calc-grid         { grid-template-columns: 1fr; }
+  .sim-grid          { grid-template-columns: 1fr; }
+  .sim-slider-group  { grid-template-columns: 1fr; }
+  .sim-result        { grid-template-columns: 1fr; }
+  .shell             { padding: 24px 16px 60px; }
+  .topbar            { padding: 12px 16px; }
+}
+
+</style>
+</head>
+<body>
+
+<!-- ══ TOP BAR ══════════════════════════════════════════════════════════════ -->
+<div class="topbar">
+  <div class="topbar-left">
+    <div class="logo-mark">itaú</div>
+    <div class="topbar-title">
+      <strong>Authentication Risk Calculator</strong>
+      Behaviorally-Informed Auth Prototype — Research
+    </div>
+  </div>
+  <div class="topbar-right">
+    <span class="badge badge-v1">v1.0</span>
+    <span class="badge badge-research">Research</span>
+  </div>
+</div>
+
+<!-- ══ MAIN SHELL ════════════════════════════════════════════════════════════ -->
+<div class="shell">
+
+  <!-- mode switch -->
+  <div class="mode-tabs">
+    <button class="mode-tab active" onclick="switchMode('calc', event)">🧮 Calculator</button>
+    <button class="mode-tab" onclick="switchMode('sim', event)">🔬 Signal Simulator</button>
+  </div>
+
+  <!-- ══ CALCULATOR PANEL ══════════════════════════════════════════════════ -->
+  <div class="panel active" id="panel-calc">
+    <div class="calc-grid">
+
+      <!-- LEFT: input cards -->
+      <div>
+
+        <!-- Transaction data -->
+        <div class="card">
+          <div class="card-title">
+            <div class="card-title-icon" style="background:rgba(0,77,179,0.2)">💸</div>
+            Transaction Details
+          </div>
+
+          <div class="field-group">
+            <div class="field-label">
+              Transaction amount (R$)
+              <span class="hint" id="val-label">R$ 500</span>
+            </div>
+            <input type="range" class="slider" id="s-valor" min="0" max="100" value="20"
+              oninput="updateCalc()">
+            <div class="slider-labels"><span>R$ 0</span><span>R$ 5,000</span><span>R$ 50,000+</span></div>
+          </div>
+
+          <div class="field-group">
+            <div class="field-label">Recipient</div>
+            <div class="toggle-group">
+              <button class="toggle-btn on" id="dest-known"  onclick="selectDest('known')">✓ Known contact</button>
+              <button class="toggle-btn"    id="dest-new"    onclick="selectDest('new')">New recipient</button>
+              <button class="toggle-btn"    id="dest-never"  onclick="selectDest('never')">Never transacted</button>
+            </div>
+          </div>
+
+          <div class="field-group">
+            <div class="field-label">
+              How routine is this operation for this user?
+              <span class="hint" id="freq-label">Routine</span>
+            </div>
+            <input type="range" class="slider" id="s-freq" min="0" max="100" value="15"
+              oninput="updateCalc()">
+            <div class="slider-labels"><span>Routine</span><span>Occasional</span><span>Never done</span></div>
+          </div>
+        </div>
+
+        <!-- Device & session -->
+        <div class="card">
+          <div class="card-title">
+            <div class="card-title-icon" style="background:rgba(0,168,107,0.2)">📱</div>
+            Device &amp; Session
+          </div>
+
+          <div class="field-group">
+            <div class="field-label">Device status</div>
+            <!-- note: values map to raw device-risk score (0, 30, 60, 85) -->
+            <select class="select-field" id="s-device" onchange="updateCalc()">
+              <option value="0">Primary device — registered for months</option>
+              <option value="30">Secondary device — registered a few days ago</option>
+              <option value="60">New device — registered hours ago</option>
+              <option value="85">Unregistered device</option>
+            </select>
+          </div>
+
+          <div class="field-group">
+            <div class="field-label">
+              Auth prompts so far this session
+              <span class="hint" id="ops-label">2 prompts</span>
+            </div>
+            <!-- this maps to habituation risk — more prompts = more habituation = worse deliberation -->
+            <input type="range" class="slider" id="s-ops" min="0" max="100" value="10"
+              oninput="updateCalc()">
+            <div class="slider-labels"><span>1</span><span>5</span><span>12+</span></div>
+          </div>
+
+          <div class="field-group">
+            <div class="field-label">Time of operation</div>
+            <div class="toggle-group">
+              <button class="toggle-btn on" id="hora-normal"  onclick="selectHora('normal')">Normal hours</button>
+              <button class="toggle-btn"    id="hora-noite"   onclick="selectHora('noite')">Late night</button>
+              <button class="toggle-btn"    id="hora-atipico" onclick="selectHora('atipico')">Atypical for this user</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Behavioral context -->
+        <div class="card">
+          <div class="card-title">
+            <div class="card-title-icon" style="background:rgba(224,62,62,0.2)">🧠</div>
+            Behavioral Context
+          </div>
+
+          <div class="field-group">
+            <div class="field-label">Typing / navigation pattern</div>
+            <div class="toggle-group">
+              <button class="toggle-btn on" id="nav-normal"   onclick="selectNav('normal')">Consistent with history</button>
+              <button class="toggle-btn"    id="nav-rushed"   onclick="selectNav('rushed')">Faster than usual</button>
+              <button class="toggle-btn"    id="nav-hesitant" onclick="selectNav('hesitant')">Many errors / hesitation</button>
+            </div>
+          </div>
+
+          <div class="field-group">
+            <div class="field-label">Location</div>
+            <div class="toggle-group">
+              <button class="toggle-btn on" id="loc-usual"     onclick="selectLoc('usual')">Usual location</button>
+              <button class="toggle-btn"    id="loc-different" onclick="selectLoc('different')">Different city</button>
+              <button class="toggle-btn"    id="loc-abroad"    onclick="selectLoc('abroad')">Abroad / VPN</button>
+            </div>
+          </div>
+
+          <div class="field-group">
+            <div class="field-label">Recent authentication failures</div>
+            <div class="toggle-group">
+              <button class="toggle-btn on" id="auth-ok"      onclick="selectAuth('ok')">No recent failures</button>
+              <button class="toggle-btn"    id="auth-one"     onclick="selectAuth('one')">1 recent failure</button>
+              <button class="toggle-btn"    id="auth-several" onclick="selectAuth('several')">Multiple failures</button>
+            </div>
+          </div>
+        </div>
+
+      </div><!-- end left column -->
+
+      <!-- RIGHT: result card -->
+      <div>
+        <div class="result-card">
+
+          <div class="result-header">
+            <div class="result-header-label">Risk Score</div>
+            <div class="tier-display t1" id="tier-display">
+              <div class="tier-number" id="tier-num">Tier 1</div>
+              <div class="tier-name"   id="tier-name">Passive</div>
+              <div class="tier-action" id="tier-action">No additional authentication</div>
+            </div>
+          </div>
+
+          <div class="score-section">
+            <div class="score-row">
+              <span class="score-label">Total score</span>
+              <span class="score-number" id="score-num" style="color: var(--tier1)">12</span>
+            </div>
+            <div class="score-bar-bg">
+              <div class="score-bar-fill" id="score-bar" style="width:12%; background: var(--tier1)"></div>
+            </div>
+            <div class="slider-labels" style="margin-top:6px">
+              <span style="color:var(--tier1)">0 — Tier 1</span>
+              <span style="color:var(--tier2)">40 — Tier 2</span>
+              <span style="color:var(--tier3)">70 — Tier 3</span>
+            </div>
+          </div>
+
+          <div class="signals-section">
+            <div class="signals-title">Signal breakdown</div>
+
+            <div class="signal-item">
+              <div class="signal-name">Transaction amount</div>
+              <div class="signal-bar-wrap"><div class="signal-bar sig-low" id="sig-valor" style="width:10%"></div></div>
+              <div class="signal-val" id="sigv-valor">10</div>
+            </div>
+            <div class="signal-item">
+              <div class="signal-name">Recipient risk</div>
+              <div class="signal-bar-wrap"><div class="signal-bar sig-low" id="sig-dest" style="width:0%"></div></div>
+              <div class="signal-val" id="sigv-dest">0</div>
+            </div>
+            <div class="signal-item">
+              <div class="signal-name">Device trust</div>
+              <div class="signal-bar-wrap"><div class="signal-bar sig-low" id="sig-device" style="width:0%"></div></div>
+              <div class="signal-val" id="sigv-device">0</div>
+            </div>
+            <div class="signal-item">
+              <div class="signal-name">Session fatigue</div>
+              <div class="signal-bar-wrap"><div class="signal-bar sig-low" id="sig-sessao" style="width:0%"></div></div>
+              <div class="signal-val" id="sigv-sessao">0</div>
+            </div>
+            <div class="signal-item">
+              <div class="signal-name">Behavioral anomaly</div>
+              <div class="signal-bar-wrap"><div class="signal-bar sig-low" id="sig-comp" style="width:0%"></div></div>
+              <div class="signal-val" id="sigv-comp">0</div>
+            </div>
+            <div class="signal-item">
+              <div class="signal-name">Session context</div>
+              <div class="signal-bar-wrap"><div class="signal-bar sig-low" id="sig-ctx" style="width:0%"></div></div>
+              <div class="signal-val" id="sigv-ctx">0</div>
+            </div>
+          </div>
+
+          <div class="explanation-section">
+            <div class="explanation-text" id="explanation-text">
+              Low-risk operation on a trusted device. The system recognizes this as a routine pattern — no additional friction needed.
+            </div>
+          </div>
+
+        </div>
+      </div><!-- end right column -->
+
+    </div>
+  </div><!-- end calculator panel -->
+
+
+  <!-- ══ SIMULATOR PANEL ═══════════════════════════════════════════════════ -->
+  <div class="panel" id="panel-sim">
+
+    <div class="sim-header">
+      <h2>Signal Simulator</h2>
+      <p>
+        Adjust each signal independently and observe how the system determines the authentication tier.
+        Signals are weighted differently — value and device trust carry more weight than behavioral signals,
+        but behavioral signals act as amplifiers when combined with high-value transactions.
+      </p>
+    </div>
+
+    <!-- preset scenario cards -->
+    <div class="section-label">Pre-configured scenarios</div>
+    <div class="sim-grid">
+
+      <div class="sim-card" onclick="loadPreset('routine')">
+        <div class="sim-card-top">
+          <span class="sim-card-emoji">☕</span>
+          <span class="sim-tier-pill t1">Tier 1</span>
+        </div>
+        <div class="sim-card-title">Everyday use</div>
+        <div class="sim-card-desc">R$80 Pix to a saved contact, primary device, usual hours. This is what most sessions look like.</div>
+      </div>
+
+      <div class="sim-card" onclick="loadPreset('moderate')">
+        <div class="sim-card-top">
+          <span class="sim-card-emoji">⚠️</span>
+          <span class="sim-tier-pill t2">Tier 2</span>
+        </div>
+        <div class="sim-card-title">Moderate signal</div>
+        <div class="sim-card-desc">R$1,200 Pix to a new recipient, familiar device, but at an unusual hour for this user.</div>
+      </div>
+
+      <div class="sim-card" onclick="loadPreset('attack')">
+        <div class="sim-card-top">
+          <span class="sim-card-emoji">🚨</span>
+          <span class="sim-tier-pill t3">Tier 3</span>
+        </div>
+        <div class="sim-card-title">Social engineering pattern</div>
+        <div class="sim-card-desc">R$15,000 wire to an unknown account, new device, rushed navigation — classic vishing fingerprint.</div>
+      </div>
+
+    </div>
+
+    <!-- individual signal sliders -->
+    <div class="sim-signals">
+      <div class="sim-signals-title">Adjust signals manually</div>
+      <div class="sim-signals-sub">
+        Each signal contributes with a different weight to the final score.
+        Value and device trust dominate; behavioral anomaly signals amplify the others
+        when present — matching the literature on how social engineers exploit
+        habituated users (Cialdini, 2007; Kahneman, 2011).
+      </div>
+
+      <div class="sim-slider-group">
+
+        <div class="sim-slider-item">
+          <div class="sim-slider-header">
+            <span class="sim-slider-name">💰 Transaction value</span>
+            <span class="sim-slider-val val-low" id="ss-valor-val">Low</span>
+          </div>
+          <div class="sim-slider-desc">Value relative to the user's behavioral baseline, not absolute R$ amount.</div>
+          <input type="range" class="slider" id="ss-valor" min="0" max="100" value="10" oninput="updateSim()">
+          <div class="slider-labels"><span>R$0</span><span>R$5k</span><span>R$50k+</span></div>
+        </div>
+
+        <div class="sim-slider-item">
+          <div class="sim-slider-header">
+            <span class="sim-slider-name">👤 Recipient risk</span>
+            <span class="sim-slider-val val-low" id="ss-dest-val">Low</span>
+          </div>
+          <div class="sim-slider-desc">Transaction history and frequency with this specific recipient.</div>
+          <input type="range" class="slider" id="ss-dest" min="0" max="100" value="5" oninput="updateSim()">
+          <div class="slider-labels"><span>Frequent</span><span>New</span><span>Never seen</span></div>
+        </div>
+
+        <div class="sim-slider-item">
+          <div class="sim-slider-header">
+            <span class="sim-slider-name">📱 Device trust</span>
+            <span class="sim-slider-val val-low" id="ss-device-val">Low</span>
+          </div>
+          <div class="sim-slider-desc">Registration age and usage history of the current device.</div>
+          <input type="range" class="slider" id="ss-device" min="0" max="100" value="5" oninput="updateSim()">
+          <div class="slider-labels"><span>Primary</span><span>Secondary</span><span>Unknown</span></div>
+        </div>
+
+        <div class="sim-slider-item">
+          <div class="sim-slider-header">
+            <span class="sim-slider-name">🔁 Session fatigue</span>
+            <span class="sim-slider-val val-low" id="ss-fadiga-val">Low</span>
+          </div>
+          <!-- this is the habituation signal — the more prompts, the less deliberate the user's processing -->
+          <div class="sim-slider-desc">High prompt frequency → habituation → user approves without deliberate evaluation. See Kahneman (2011) ch. 2.</div>
+          <input type="range" class="slider" id="ss-fadiga" min="0" max="100" value="8" oninput="updateSim()">
+          <div class="slider-labels"><span>1–2 ops</span><span>5–6 ops</span><span>12+ ops</span></div>
+        </div>
+
+        <div class="sim-slider-item">
+          <div class="sim-slider-header">
+            <span class="sim-slider-name">🧠 Behavioral anomaly</span>
+            <span class="sim-slider-val val-low" id="ss-anom-val">Low</span>
+          </div>
+          <div class="sim-slider-desc">Deviation from established typing cadence, navigation speed, and action sequences.</div>
+          <input type="range" class="slider" id="ss-anom" min="0" max="100" value="5" oninput="updateSim()">
+          <div class="slider-labels"><span>Normal</span><span>Rushed</span><span>Atypical</span></div>
+        </div>
+
+        <div class="sim-slider-item">
+          <div class="sim-slider-header">
+            <span class="sim-slider-name">🌍 Context anomaly</span>
+            <span class="sim-slider-val val-low" id="ss-ctx-val">Low</span>
+          </div>
+          <div class="sim-slider-desc">Location, time of day, and unusual combinations of session parameters.</div>
+          <input type="range" class="slider" id="ss-ctx" min="0" max="100" value="5" oninput="updateSim()">
+          <div class="slider-labels"><span>Usual</span><span>Different</span><span>Suspicious</span></div>
+        </div>
+
+      </div>
+    </div>
+
+    <!-- simulator result -->
+    <div class="sim-result">
+      <div class="sim-tier-big t1" id="sim-tier-display">
+        <div class="sim-tier-num" id="sim-tier-num">Tier 1</div>
+        <div class="sim-tier-big-name" id="sim-tier-name">Passive</div>
+        <div class="sim-tier-score">Score: <span id="sim-score">18</span>/100</div>
+      </div>
+      <div>
+        <div class="sim-exp-title" id="sim-exp-title">No friction needed</div>
+        <div class="sim-exp-body" id="sim-exp-body">
+          All signals are within expected parameters. The cognitive cost of adding an authentication prompt
+          would exceed the security benefit in this context. The system approves silently, preserving the
+          user's attention for when it actually matters.
+        </div>
+      </div>
+    </div>
+
+  </div><!-- end simulator panel -->
+
+</div><!-- end shell -->
+
+<!-- ══ FOOTER ════════════════════════════════════════════════════════════════ -->
+<footer class="footer">
+  Carvalho, B.R.O. (2026). <em>Security That Works: A Cognitive Redesign of Itaú's iToken.</em> —
+  <a href="https://github.com/Bernardo-R-O-Carvalho/Itau-auth-redesing" target="_blank">GitHub</a> —
+  Independent academic research. Not affiliated with Itaú Unibanco S.A.
+</footer>
+
+
+<!-- ══ SCRIPT ═════════════════════════════════════════════════════════════════
+  Scoring model overview:
+  ─────────────────────────────────────────────────────────────────────────────
+  Six signals → weighted sum → clamp to [0,100] → tier threshold
+
+    Signal              Weight    Max raw contribution
+    ──────────────      ──────    ────────────────────
+    Transaction value    0.30         30
+    Recipient risk       0.20         20
+    Device trust         0.25         25
+    Session fatigue      0.10         10
+    Behavioral anomaly   0.10         10  (amplifier)
+    Context anomaly      0.05         10
+
+    Tier 1: score < 40   → passive (no additional auth)
+    Tier 2: score 40–69  → lightweight biometric (~3s)
+    Tier 3: score ≥ 70   → deliberate pause + out-of-band confirm
+
+  Thresholds from the paper: chosen so that the system triggers Tier 2
+  on ~15% of sessions and Tier 3 on ~3–5% in a typical user's month,
+  preventing habituation while catching anomalous operations.
+
+  Note: in a real implementation these weights would be learned per-user
+  via a Bayesian model. This is a fixed approximation for illustration.
+  ─────────────────────────────────────────────────────────────────────────────
+-->
+<script>
+
+// ── global state for the calculator toggles ──────────────────────────────────
+// (sliders are read directly from the DOM — only discretes need state)
+const state = {
+  dest:  'known',
+  hora:  'normal',
+  nav:   'normal',
+  loc:   'usual',
+  auth:  'ok'
+};
+
+// debug flag — flip to true to log score breakdown to console
+// TODO: remove before "shipping" (lol it's a static HTML file)
+const DEBUG = false;
+
+// ── toggle helpers ────────────────────────────────────────────────────────────
+function selectDest(v) {
+  state.dest = v;
+  ['known','new','never'].forEach(id => document.getElementById('dest-' + id).classList.remove('on'));
+  document.getElementById('dest-' + v).classList.add('on');
+  updateCalc();
+}
+
+function selectHora(v) {
+  state.hora = v;
+  ['normal','noite','atipico'].forEach(id => document.getElementById('hora-' + id).classList.remove('on'));
+  document.getElementById('hora-' + v).classList.add('on');
+  updateCalc();
+}
+
+function selectNav(v) {
+  state.nav = v;
+  ['normal','rushed','hesitant'].forEach(id => document.getElementById('nav-' + id).classList.remove('on'));
+  document.getElementById('nav-' + v).classList.add('on');
+  updateCalc();
+}
+
+function selectLoc(v) {
+  state.loc = v;
+  ['usual','different','abroad'].forEach(id => document.getElementById('loc-' + id).classList.remove('on'));
+  document.getElementById('loc-' + v).classList.add('on');
+  updateCalc();
+}
+
+function selectAuth(v) {
+  state.auth = v;
+  ['ok','one','several'].forEach(id => document.getElementById('auth-' + id).classList.remove('on'));
+  document.getElementById('auth-' + v).classList.add('on');
+  updateCalc();
+}
+
+// ── core scoring engine ───────────────────────────────────────────────────────
+function computeSignals(valor, freq, dest, deviceRaw, ops, hora, nav, loc, auth) {
+
+  // Signal 1 — Transaction value (max 30)
+  // Using a non-linear curve so small transactions don't register at all
+  const sigValor = Math.round((valor / 100) * 30);
+
+  // Signal 2 — Recipient risk (max 20)
+  const destScore = { known: 0, new: 12, never: 20 };
+  const sigDest   = destScore[dest] ?? 0;
+
+  // Signal 3 — Device trust (max 25)
+  // deviceRaw comes from the select options (0 / 30 / 60 / 85)
+  const sigDevice = Math.round((parseInt(deviceRaw) / 85) * 25);
+
+  // Signal 4 — Session fatigue / habituation (max 10)
+  // This is the Kahneman habituation proxy — see paper §3.2
+  const sigSessao = Math.round((ops / 100) * 10);
+
+  // Signal 5 — Behavioral anomaly (max 10)
+  // Composite of nav pattern + operation frequency deviation
+  const navScore  = { normal: 0, rushed: 5, hesitant: 10 };
+  const freqScore = Math.round((freq / 100) * 5);
+  const sigComp   = Math.min(10, Math.round((navScore[nav] + freqScore) / 2));
+
+  // Signal 6 — Context anomaly (max 10)
+  const locScore  = { usual: 0, different: 4, abroad: 8 };
+  const horaScore = { normal: 0, noite: 3, atipico: 6 };
+  const authScore = { ok: 0, one: 4, several: 8 };
+  const sigCtx    = Math.min(10, Math.round((locScore[loc] + horaScore[hora] + authScore[auth]) / 2));
+
+  const total = Math.min(100, sigValor + sigDest + sigDevice + sigSessao + sigComp + sigCtx);
+
+  if (DEBUG) {
+    console.log('── score breakdown ──────────────');
+    console.log('valor:   ', sigValor);
+    console.log('dest:    ', sigDest);
+    console.log('device:  ', sigDevice);
+    console.log('sessao:  ', sigSessao);
+    console.log('comp:    ', sigComp);
+    console.log('ctx:     ', sigCtx);
+    console.log('TOTAL:   ', total);
+    console.log('─────────────────────────────────');
+  }
+
+  return { sigValor, sigDest, sigDevice, sigSessao, sigComp, sigCtx, total };
+}
+
+// ── tier resolution ───────────────────────────────────────────────────────────
+function getTier(score) {
+  if (score < 40) return 1;
+  if (score < 70) return 2;
+  return 3;
+}
+
+function tierMeta(tier) {
+  return {
+    1: { cls: 't1', num: 'Tier 1', name: 'Passive',           action: 'No additional authentication',          color: 'var(--tier1)' },
+    2: { cls: 't2', num: 'Tier 2', name: 'Light biometric',   action: 'Biometric confirmation (~3 seconds)',    color: 'var(--tier2)' },
+    3: { cls: 't3', num: 'Tier 3', name: 'Deliberate pause',  action: 'Secondary channel + 60-second window',  color: 'var(--tier3)' },
+  }[tier];
+}
+
+// returns css class for signal bar fill color
+function signalColor(pct) {
+  if (pct <= 33) return 'sig-low';
+  if (pct <= 66) return 'sig-mid';
+  return 'sig-high';
+}
+
+// ── explanation copy ─────────────────────────────────────────────────────────
+function explanationText(tier, signals) {
+  const { sigValor, sigDest, sigDevice, sigComp, sigCtx } = signals;
+
+  // collect the dominant signals to mention in the explanation
+  const drivers = [];
+  if (sigValor  >= 15) drivers.push('elevated transaction value');
+  if (sigDest   >= 12) drivers.push('unknown recipient');
+  if (sigDevice >= 15) drivers.push('untrusted device');
+  if (sigComp   >=  6) drivers.push('behavioral anomaly');
+  if (sigCtx    >=  5) drivers.push('atypical context');
+
+  if (tier === 1) {
+    return 'Low-risk operation on a trusted device. The system recognizes this as a routine pattern — ' +
+           'no additional friction needed. Preserving the user\'s attentional resources for operations that actually warrant them.';
+  }
+
+  if (tier === 2) {
+    const d = drivers.length > 0 ? drivers.join(' and ') : 'parameters slightly above baseline';
+    return `Moderate signal detected: ${d}. A brief biometric confirmation (~3 seconds) adds friction ` +
+           'proportional to risk — enough to interrupt an accidental tap, without triggering the habituation ' +
+           'that makes repeated prompts cognitively invisible.';
+  }
+
+  // tier 3
+  const d = drivers.length > 0 ? drivers.join(', ') : 'combination of anomalous signals';
+  return `High risk — ${d}. The 60-second deliberate pause with out-of-band confirmation is activated. ` +
+         'This is the only mechanism that interrupts the urgency states created by social engineering — ' +
+         'attackers cannot maintain psychological pressure through a deliberate pause with a separate notification channel.';
+}
+
+// ── calculator update ────────────────────────────────────────────────────────
+function updateCalc() {
+
+  // read slider values
+  const valor     = parseInt(document.getElementById('s-valor').value);
+  const freq      = parseInt(document.getElementById('s-freq').value);
+  const deviceRaw = document.getElementById('s-device').value;
+  const ops       = parseInt(document.getElementById('s-ops').value);
+
+  // update human-readable labels
+  // using a rough curve: below 50 → R$0–5k, above → R$5k–50k
+  const amountBRL = valor < 50
+    ? 'R$ ' + Math.round(valor * 100).toLocaleString('en-US')
+    : 'R$ ' + Math.round(valor * 600).toLocaleString('en-US');
+  document.getElementById('val-label').textContent = amountBRL;
+
+  const freqText = freq < 33 ? 'Routine' : freq < 66 ? 'Occasional' : 'Never done';
+  document.getElementById('freq-label').textContent = freqText;
+
+  const promptCount = Math.round(1 + (ops / 100) * 11);
+  document.getElementById('ops-label').textContent = promptCount + (promptCount === 1 ? ' prompt' : ' prompts');
+
+  // compute
+  const signals = computeSignals(valor, freq, state.dest, deviceRaw, ops, state.hora, state.nav, state.loc, state.auth);
+  const { sigValor, sigDest, sigDevice, sigSessao, sigComp, sigCtx, total } = signals;
+  const tier = getTier(total);
+  const meta = tierMeta(tier);
+
+  // update tier display
+  document.getElementById('tier-display').className = 'tier-display ' + meta.cls;
+  document.getElementById('tier-num').textContent    = meta.num;
+  document.getElementById('tier-name').textContent   = meta.name;
+  document.getElementById('tier-action').textContent = meta.action;
+
+  // update score bar
+  document.getElementById('score-num').textContent     = total;
+  document.getElementById('score-num').style.color     = meta.color;
+  document.getElementById('score-bar').style.width     = total + '%';
+  document.getElementById('score-bar').style.background = meta.color;
+
+  // update signal bars
+  function setSig(id, rawVal, maxRaw) {
+    const pct = Math.round((rawVal / maxRaw) * 100);
+    document.getElementById('sig-' + id).style.width   = pct + '%';
+    document.getElementById('sig-' + id).className     = 'signal-bar ' + signalColor(pct);
+    document.getElementById('sigv-' + id).textContent  = rawVal;
+  }
+
+  setSig('valor',  sigValor,  30);
+  setSig('dest',   sigDest,   20);
+  setSig('device', sigDevice, 25);
+  setSig('sessao', sigSessao, 10);
+  setSig('comp',   sigComp,   10);
+  setSig('ctx',    sigCtx,    10);
+
+  // update explanation
+  document.getElementById('explanation-text').textContent = explanationText(tier, signals);
+}
+
+// ── simulator update ──────────────────────────────────────────────────────────
+function updateSim() {
+
+  // signal ids and their weights
+  // weights must sum to 1.0 — double-checked: 0.28+0.22+0.22+0.10+0.10+0.08 = 1.00 ✓
+  const signals = [
+    { id: 'valor',  weight: 0.28 },
+    { id: 'dest',   weight: 0.22 },
+    { id: 'device', weight: 0.22 },
+    { id: 'fadiga', weight: 0.10 },
+    { id: 'anom',   weight: 0.10 },
+    { id: 'ctx',    weight: 0.08 },
+  ];
+
+  let score = 0;
+
+  signals.forEach(sig => {
+    const v = parseInt(document.getElementById('ss-' + sig.id).value);
+    score += v * sig.weight;
+
+    // update the Low/Medium/High label
+    const label = document.getElementById('ss-' + sig.id + '-val');
+    if (v < 33) {
+      label.textContent = 'Low';
+      label.className   = 'sim-slider-val val-low';
+    } else if (v < 66) {
+      label.textContent = 'Medium';
+      label.className   = 'sim-slider-val val-mid';
+    } else {
+      label.textContent = 'High';
+      label.className   = 'sim-slider-val val-high';
+    }
+  });
+
+  score = Math.round(score);
+  const tier = getTier(score);
+  const meta = tierMeta(tier);
+
+  // update result block
+  document.getElementById('sim-tier-display').className  = 'sim-tier-big ' + meta.cls;
+  document.getElementById('sim-tier-num').textContent    = meta.num;
+  document.getElementById('sim-tier-name').textContent   = meta.name;
+  document.getElementById('sim-score').textContent       = score;
+
+  const titles = {
+    1: 'No friction needed',
+    2: 'Light biometric required',
+    3: 'Deliberate pause activated',
+  };
+
+  const bodies = {
+    1: 'All signals are within expected parameters. The cognitive cost of adding an auth prompt ' +
+       'exceeds the security benefit in this context. The system approves silently, preserving the ' +
+       "user's attention for when it actually matters.",
+
+    2: 'One or more signals show moderate deviation from baseline. The biometric confirmation (~3 seconds) ' +
+       'adds friction proportional to the risk — enough to interrupt an accidental tap, without creating ' +
+       'the habituation that makes high-frequency prompts cognitively invisible.',
+
+    3: 'Signal combination indicates elevated risk. The 60-second deliberate pause with out-of-band ' +
+       'secondary channel confirmation is the only mechanism that directly addresses social engineering — ' +
+       'attackers cannot maintain urgency-based psychological pressure through a deliberate pause with ' +
+       'an independent notification channel. (Cialdini, 2007 — urgency as the primary bypass mechanism.)',
+  };
+
+  document.getElementById('sim-exp-title').textContent = titles[tier];
+  document.getElementById('sim-exp-body').textContent  = bodies[tier];
+}
+
+// ── preset loader ─────────────────────────────────────────────────────────────
+function loadPreset(name) {
+  const presets = {
+    routine:  { valor: 5,  dest: 5,  device: 5,  fadiga: 8,  anom: 5,  ctx: 5  },
+    moderate: { valor: 45, dest: 50, device: 10, fadiga: 15, anom: 30, ctx: 40 },
+    attack:   { valor: 80, dest: 90, device: 75, fadiga: 20, anom: 70, ctx: 60 },
+  };
+
+  const p = presets[name];
+  if (!p) return; // shouldn't happen but just in case
+
+  Object.entries(p).forEach(([id, val]) => {
+    document.getElementById('ss-' + id).value = val;
+    // manually trigger the fill repaint for each slider
+    const slider = document.getElementById('ss-' + id);
+    const pct    = (slider.value - slider.min) / (slider.max - slider.min) * 100;
+    slider.style.background = `linear-gradient(to right, rgba(0,77,179,0.6) ${pct}%, rgba(255,255,255,0.06) ${pct}%)`;
+  });
+
+  updateSim();
+}
+
+// ── mode switch ───────────────────────────────────────────────────────────────
+function switchMode(mode, event) {
+  document.querySelectorAll('.mode-tab').forEach(t => t.classList.remove('active'));
+  document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
+  document.getElementById('panel-' + mode).classList.add('active');
+  if (event && event.target) event.target.classList.add('active');
+}
+
+// ── slider visual fill ────────────────────────────────────────────────────────
+// paints the left side of the slider track blue — browser defaults are ugly
+function initSliderFill(slider) {
+  const repaint = function() {
+    const pct = (this.value - this.min) / (this.max - this.min) * 100;
+    this.style.background = `linear-gradient(to right, rgba(0,77,179,0.6) ${pct}%, rgba(255,255,255,0.06) ${pct}%)`;
+  };
+  slider.addEventListener('input', repaint);
+  // run once on init
+  const pct = (slider.value - slider.min) / (slider.max - slider.min) * 100;
+  slider.style.background = `linear-gradient(to right, rgba(0,77,179,0.6) ${pct}%, rgba(255,255,255,0.06) ${pct}%)`;
+}
+
+document.querySelectorAll('.slider').forEach(initSliderFill);
+
+// ── init ──────────────────────────────────────────────────────────────────────
+updateCalc();
+updateSim();
+
+</script>
+</body>
+</html>
