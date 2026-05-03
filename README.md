@@ -54,11 +54,11 @@ Four interactive pages, live in the browser — no installation needed:
 
 Walk through all three tiers as a user would experience them. Includes the real-time risk score panel, the device trust timeline (how the system builds confidence in a new device over 24–72 hours), and the out-of-band confirmation mechanism for Tier 3.
 
-### → [Watch a fraud attack happen — and get stopped](https://bernardo-r-o-carvalho.github.io/Itau-auth-redesing/itau_auth_prototype.html)
+### → [Watch a fraud attack happen — and get stopped](https://bernardo-r-o-carvalho.github.io/Itau-auth-redesing/Attack%20simulation.html)
 
 This is the part that makes the argument real. The prototype walks through a vishing attack step by step — a fraudster on the phone, guiding a victim through a fraudulent transfer in real time. You watch each moment where the current iToken system fails to intervene, and then you watch the redesigned system break the attack at the exact point where it would have succeeded. The 60-second deliberate pause isn't an abstract concept here: you see why a fraudster cannot maintain psychological pressure through it, and why the current system has no equivalent mechanism at all.
 
-### → [Try the risk calculator](https://bernardo-r-o-carvalho.github.io/Itau-auth-redesing/Attack%20simulation.html)
+### → [Try the risk calculator](https://bernardo-r-o-carvalho.github.io/Itau-auth-redesing/risk_calculator.html)
 
 Adjust transaction parameters — amount, recipient, device, time of day, behavioral signals — and watch the risk score update in real time. A second mode lets you manipulate the six underlying signals independently to explore how they interact. This tool makes the scoring model from the paper tangible and inspectable.
 
